@@ -2,7 +2,6 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
 
 	_ "github.com/lib/pq"
 
@@ -27,9 +26,6 @@ func NewDatabase() (*Database, error) {
 	host := os.Getenv(DB_HOST)
 	port := os.Getenv(DB_PORT)
 	dbName := os.Getenv(DB_NAME)
-
-	fmt.Println("postgres",
-		"host="+host+" port="+port+" user="+username+" password="+pwd+" dbname="+dbName+" sslmode=disable")
 
 	db, err := sql.Open("postgres",
 		"host="+host+" port="+port+" user="+username+" password="+pwd+" dbname="+dbName+" sslmode=disable",
