@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 
 	_ "github.com/lib/pq"
 
@@ -12,15 +13,26 @@ type Database struct {
 	db *sql.DB
 }
 
+const (
+	DB_USER     = "DB_USER"
+	DB_PASSWORD = "DB_PASSWORD"
+	DB_HOST     = "DB_HOST"
+	DB_PORT     = "DB_PORT"
+	DB_NAME     = "DB_NAME"
+)
+
 func NewDatabase() (*Database, error) {
-	username := os.Getenv("DB_USER")
-	pwd := os.Getenv("DB_PASSWORD")
-	host := os.Getenv("DB_HOST")
-	port := os.Getenv("DB_PORT")
-	dbName := os.Getenv("DB_NAME")
+	username := os.Getenv(DB_USER)
+	pwd := os.Getenv(DB_PASSWORD)
+	host := os.Getenv(DB_HOST)
+	port := os.Getenv(DB_PORT)
+	dbName := os.Getenv(DB_NAME)
+
+	fmt.Println("postgres",
+		"host="+host+" port="+port+" user="+username+" password="+pwd+" dbname="+dbName+" sslmode=disable")
 
 	db, err := sql.Open("postgres",
-		"host="+host+" port="+port+" user="+username+" password="+pwd+" dbname="+dbName+" ?sslmode=disable",
+		"host="+host+" port="+port+" user="+username+" password="+pwd+" dbname="+dbName+" sslmode=disable",
 	)
 
 	if err != nil {
