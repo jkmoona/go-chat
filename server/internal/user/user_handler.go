@@ -69,26 +69,21 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	claims, err := auth.VerifyRefreshToken(refreshToken)
+	claims, err := auth.ValidateRefreshToken(refreshToken)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
 		return
 	}
 
-	userID, err := strconv.ParseInt(claims.ID, 10, 64)
-	// err check can be omitted?
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
-		return
-	}
+	userID, _ := strconv.ParseInt(claims.ID, 10, 64)
 
-	at, err := auth.GenerateAccessToken(userID, claims.Username, 15*time.Minute)
+	accessToken, err := auth.GenerateAccessToken(userID, claims.Username, 15*time.Minute)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate access token"})
 		return
 	}
 
-	c.SetCookie("access_token", at, 900, "/", "localhost", true, true)
-	c.JSON(http.StatusOK, gin.H{"success": "access token set"})
+	c.SetCookie("access_token", accessToken, 900, "/", "localhost", true, true)
+	c.JSON(http.StatusOK, gin.H{"success": "access token refreshed successfully"})
 
 }

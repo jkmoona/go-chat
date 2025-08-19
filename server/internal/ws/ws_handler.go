@@ -10,16 +10,31 @@ import (
 type Handler struct {
 	hub *Hub
 }
+type CreateRoomReq struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type RoomRes struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type ClientRes struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+}
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin:     checkOrigin,
+}
 
 func NewHandler(h *Hub) *Handler {
 	return &Handler{
 		hub: h,
 	}
-}
-
-type CreateRoomReq struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
 }
 
 func (h *Handler) CreateRoom(c *gin.Context) {
@@ -36,14 +51,6 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, req)
-}
-
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
 }
 
 func (h *Handler) JoinRoom(c *gin.Context) {
@@ -78,11 +85,6 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 	cl.readMessage(h.hub)
 }
 
-type RoomRes struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
 func (h *Handler) GetRooms(c *gin.Context) {
 	rooms := make([]RoomRes, 0)
 
@@ -94,11 +96,6 @@ func (h *Handler) GetRooms(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, rooms)
-}
-
-type ClientRes struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
 }
 
 func (h *Handler) GetClients(c *gin.Context) {
@@ -118,4 +115,8 @@ func (h *Handler) GetClients(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, clients)
+}
+
+func checkOrigin(r *http.Request) bool {
+	return r.Header.Get("Origin") == "http://localhost:8080"
 }

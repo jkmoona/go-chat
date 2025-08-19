@@ -28,7 +28,7 @@ func InitRouter(userHandler *user.Handler, wsHandler *ws.Handler) {
 		MaxAge: 12 * time.Hour,
 	}))
 
-	r.POST("/signup", userHandler.CreateUser)
+	r.POST("/register", userHandler.CreateUser)
 	r.POST("/login", userHandler.Login)
 	r.GET("/logout", userHandler.Logout)
 	r.POST("/refresh", userHandler.RefreshToken)

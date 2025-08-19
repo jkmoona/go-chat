@@ -18,14 +18,14 @@ func getAccessSecret() string {
 	secret := os.Getenv("ACCESS_TOKEN_SECRET")
 
 	if secret == "" {
-		panic("ACCESS_TOKEN_SECRET environment variable is not set")
+		panic("ACCESS_TOKEN_SECRET environment variable not set")
 	}
 	return secret
 }
 func getRefreshSecret() string {
 	secret := os.Getenv("REFRESH_TOKEN_SECRET")
 	if secret == "" {
-		panic("REFRESH_TOKEN_SECRET environment variable is not set")
+		panic("REFRESH_TOKEN_SECRET environment variable not set")
 	}
 	return secret
 }
@@ -36,6 +36,7 @@ func GenerateAccessToken(userID int64, username string, duration time.Duration) 
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    strconv.Itoa(int(userID)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
 		},
 	})
@@ -50,6 +51,7 @@ func GenerateRefreshToken(userID int64, username string, duration time.Duration)
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    strconv.Itoa(int(userID)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
 		},
 	})
@@ -58,7 +60,7 @@ func GenerateRefreshToken(userID int64, username string, duration time.Duration)
 	return signedToken, err
 }
 
-func VerifyAccessToken(tokenStr string) (*MyJWTClaims, error) {
+func ValidateAccessToken(tokenStr string) (*MyJWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &MyJWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(getAccessSecret()), nil
 	})
@@ -73,7 +75,7 @@ func VerifyAccessToken(tokenStr string) (*MyJWTClaims, error) {
 	return claims, nil
 }
 
-func VerifyRefreshToken(tokenStr string) (*MyJWTClaims, error) {
+func ValidateRefreshToken(tokenStr string) (*MyJWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &MyJWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(getRefreshSecret()), nil
 	})
