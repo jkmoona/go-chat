@@ -118,5 +118,5 @@ func (h *Handler) GetClients(c *gin.Context) {
 }
 
 func checkOrigin(r *http.Request) bool {
-	return r.Header.Get("Origin") == "http://localhost:8080"
+	return r.Header.Get("Origin") == "http://localhost:5173"
 }

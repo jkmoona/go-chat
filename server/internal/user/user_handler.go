@@ -1,6 +1,7 @@
 package user
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -22,27 +23,41 @@ func NewHandler(s Service) *Handler {
 func (h *Handler) CreateUser(c *gin.Context) {
 	var u CreateUserReq
 	if err := c.ShouldBindJSON(&u); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 		return
 	}
+
 	res, err := h.Service.CreateUser(c.Request.Context(), &u)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		switch {
+		case errors.Is(err, ErrUsernameTaken):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		}
 		return
 	}
-	c.JSON(http.StatusOK, res)
+
+	c.JSON(http.StatusCreated, res)
 }
 
 func (h *Handler) Login(c *gin.Context) {
 	var user LoginUserReq
-	if err := c.BindJSON(&user); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := c.ShouldBindJSON(&user); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 		return
 	}
 
 	u, err := h.Service.Login(c.Request.Context(), &user)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		switch {
+		case errors.Is(err, ErrInvalidCredentials):
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		case errors.Is(err, ErrTokenGeneration):
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Authentication failed"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		}
 		return
 	}
 

@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"time"
 
@@ -31,7 +32,6 @@ func (s *service) CreateUser(c context.Context, req *CreateUserReq) (*CreateUser
 
 	u := &User{
 		Username: req.Username,
-		Email:    req.Email,
 		Password: hashedPassword,
 	}
 
@@ -44,7 +44,6 @@ func (s *service) CreateUser(c context.Context, req *CreateUserReq) (*CreateUser
 	res := &CreateUserRes{
 		ID:       strconv.Itoa(int(r.ID)),
 		Username: r.Username,
-		Email:    r.Email,
 	}
 
 	return res, nil
@@ -54,25 +53,32 @@ func (s *service) Login(c context.Context, req *LoginUserReq) (*LoginUserRes, er
 	ctx, cancel := context.WithTimeout(c, s.timeout)
 	defer cancel()
 
-	u, err := s.Repository.GetUserByEmail(ctx, req.Email)
+	u, err := s.Repository.GetUser(ctx, req.Username)
 	if err != nil {
-		return &LoginUserRes{}, err
+		if errors.Is(err, ErrUserNotFound) {
+			return nil, ErrInvalidCredentials
+		}
+		return nil, err
 	}
 
-	err = auth.CheckPassword(req.Password, u.Password)
-	if err != nil {
-		return &LoginUserRes{}, err
+	if err := auth.CheckPassword(req.Password, u.Password); err != nil {
+		return nil, ErrInvalidCredentials
 	}
 
 	at, err := auth.GenerateAccessToken(u.ID, u.Username, 15*time.Minute)
 	if err != nil {
-		return &LoginUserRes{}, err
+		return nil, ErrTokenGeneration
 	}
 
 	rt, err := auth.GenerateRefreshToken(u.ID, u.Username, 24*time.Hour)
 	if err != nil {
-		return &LoginUserRes{}, err
+		return nil, ErrTokenGeneration
 	}
 
-	return &LoginUserRes{AccessToken: at, RefreshToken: rt, Username: u.Username, ID: strconv.Itoa(int(u.ID))}, nil
+	return &LoginUserRes{
+		AccessToken:  at,
+		RefreshToken: rt,
+		Username:     u.Username,
+		ID:           strconv.Itoa(int(u.ID)),
+	}, nil
 }
