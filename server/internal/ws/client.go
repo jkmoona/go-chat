@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"encoding/json"
 	"log"
 
 	"github.com/gorilla/websocket"
@@ -31,7 +32,6 @@ func (c *Client) writeMessage() {
 		if !ok {
 			return
 		}
-
 		c.Conn.WriteJSON(message)
 	}
 }
@@ -51,12 +51,17 @@ func (c *Client) readMessage(hub *Hub) {
 			break
 		}
 
-		msg := &Message{
-			Content:  string(m),
-			RoomID:   c.RoomID,
-			Username: c.Username,
+		var msg Message
+
+		// TODO: DOUBLE CHECK THE MESSAGE STRUCTURE
+		if err := json.Unmarshal(m, &msg); err != nil {
+			log.Printf("invalid message: %v", err)
+			continue
 		}
 
-		hub.Broadcast <- msg
+		msg.RoomID = c.RoomID
+		msg.Username = c.Username
+
+		hub.Broadcast <- &msg
 	}
 }
