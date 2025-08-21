@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
 type Handler struct {
@@ -44,13 +45,22 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 		return
 	}
 
-	h.hub.Rooms[req.ID] = &Room{
-		ID:      req.ID,
+	roomID, err := gonanoid.New(6)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate room id"})
+		return
+	}
+
+	h.hub.Rooms[roomID] = &Room{
+		ID:      roomID,
 		Name:    req.Name,
 		Clients: make(map[string]*Client),
 	}
 
-	c.JSON(http.StatusOK, req)
+	c.JSON(http.StatusOK, RoomRes{
+		ID:   roomID,
+		Name: req.Name,
+	})
 }
 
 func (h *Handler) JoinRoom(c *gin.Context) {
@@ -72,7 +82,7 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 	}
 
 	m := &Message{
-		Content:  username + "has joined the room",
+		Content:  username + " has joined the room",
 		RoomID:   roomID,
 		Username: username,
 		Type:     "system",
