@@ -33,6 +33,7 @@ type LoginUserRes struct {
 type Repository interface {
 	CreateUser(ctx context.Context, user *User) (*User, error)
 	GetUser(ctx context.Context, username string) (*User, error)
+	UsernameExists(ctx context.Context, username string) (bool, error)
 }
 
 type Service interface {

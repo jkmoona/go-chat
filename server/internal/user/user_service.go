@@ -25,6 +25,14 @@ func (s *service) CreateUser(c context.Context, req *CreateUserReq) (*CreateUser
 	ctx, cancel := context.WithTimeout(c, s.timeout)
 	defer cancel()
 
+	exists, err := s.Repository.UsernameExists(ctx, req.Username)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, ErrUsernameTaken
+	}
+
 	hashedPassword, err := auth.HashPassword(req.Password)
 	if err != nil {
 		return nil, err
@@ -36,7 +44,6 @@ func (s *service) CreateUser(c context.Context, req *CreateUserReq) (*CreateUser
 	}
 
 	r, err := s.Repository.CreateUser(ctx, u)
-
 	if err != nil {
 		return nil, err
 	}

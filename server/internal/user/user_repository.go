@@ -38,7 +38,17 @@ func (r *repository) GetUser(ctx context.Context, username string) (*User, error
 	query := "SELECT id, username, password FROM users WHERE username = $1"
 	err := r.db.QueryRowContext(ctx, query, username).Scan(&u.ID, &u.Username, &u.Password)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrUserNotFound
+		}
 		return nil, err
 	}
 	return &u, nil
+}
+
+func (r *repository) UsernameExists(ctx context.Context, username string) (bool, error) {
+	var exists bool
+	query := "SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)"
+	err := r.db.QueryRowContext(ctx, query, username).Scan(&exists)
+	return exists, err
 }

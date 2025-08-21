@@ -5,6 +5,6 @@ import "errors"
 var (
 	ErrUserNotFound       = errors.New("user not found")
 	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrUsernameTaken      = errors.New("username already in use")
+	ErrUsernameTaken      = errors.New("username taken")
 	ErrTokenGeneration    = errors.New("failed to generate token")
 )
