@@ -1,0 +1,15 @@
+client/node_modules
+
+server/bin
+*.out
+
+.git
+.gitignore
+
+.DS_Store
+.vscode
+
+Dockerfile
+docker-compose.yml
+
+*.env
