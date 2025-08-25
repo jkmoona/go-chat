@@ -61,8 +61,9 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("access_token", u.AccessToken, 900, "/", "localhost", true, true)
-	c.SetCookie("refresh_token", u.RefreshToken, 86400, "/", "localhost", true, true)
+	c.SetSameSite(http.SameSiteNoneMode)
+	c.SetCookie("access_token", u.AccessToken, 900, "/", "", true, true)
+	c.SetCookie("refresh_token", u.RefreshToken, 86400, "/", "", true, true)
 
 	res := &LoginUserRes{
 		Username: u.Username,
@@ -72,8 +73,9 @@ func (h *Handler) Login(c *gin.Context) {
 }
 
 func (h *Handler) Logout(c *gin.Context) {
-	c.SetCookie("access_token", "", -1, "/", "localhost", true, true)
-	c.SetCookie("refresh_token", "", -1, "/", "localhost", true, true)
+	c.SetSameSite(http.SameSiteNoneMode)
+	c.SetCookie("access_token", "", -1, "/", "", true, true)
+	c.SetCookie("refresh_token", "", -1, "/", "", true, true)
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
 }
 
@@ -98,7 +100,8 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("access_token", accessToken, 900, "/", "localhost", true, true)
+	c.SetSameSite(http.SameSiteNoneMode)
+	c.SetCookie("access_token", accessToken, 900, "/", "", true, true)
 	c.JSON(http.StatusOK, gin.H{"success": "access token refreshed successfully"})
 
 }
