@@ -16,4 +16,4 @@ WORKDIR /app
 COPY --from=backend-builder /go-chat .
 COPY db ./db
 EXPOSE 8080
-CMD migrate -path ./db/migrations -database "$DATABASE_URL" up && ./go-chat
+# CMD migrate -path ./db/migrations -database "$DATABASE_URL" up && ./go-chat

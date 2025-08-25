@@ -12,24 +12,10 @@ type Database struct {
 	db *sql.DB
 }
 
-const (
-	DB_USER     = "DB_USER"
-	DB_PASSWORD = "DB_PASSWORD"
-	DB_HOST     = "DB_HOST"
-	DB_PORT     = "DB_PORT"
-	DB_NAME     = "DB_NAME"
-)
-
 func NewDatabase() (*Database, error) {
-	username := os.Getenv(DB_USER)
-	pwd := os.Getenv(DB_PASSWORD)
-	host := os.Getenv(DB_HOST)
-	port := os.Getenv(DB_PORT)
-	dbName := os.Getenv(DB_NAME)
+	dbURL := os.Getenv("DATABASE_URL")
 
-	db, err := sql.Open("postgres",
-		"host="+host+" port="+port+" user="+username+" password="+pwd+" dbname="+dbName+" sslmode=disable",
-	)
+	db, err := sql.Open("postgres", dbURL)
 
 	if err != nil {
 		return nil, err
