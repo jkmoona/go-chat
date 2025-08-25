@@ -9,7 +9,7 @@ const routes = [
     { path: "/", name: "Home", component: HomeView },
     { path: "/room/:roomId", name: "Room", component: RoomView },
     { path: "/login", name: "Login", component: LoginView },
-    { path: "/signup", name: "Register", component: RegisterView },
+    { path: "/register", name: "Register", component: RegisterView },
 ];
 
 const router = createRouter({
@@ -19,7 +19,7 @@ const router = createRouter({
 
 router.beforeEach(async (to, from, next) => {
     const auth = useAuthStore();
-    const publicPages = ["/login", "/signup"];
+    const publicPages = ["/login", "/register"];
     const authRequired = !publicPages.includes(to.path);
 
     if (authRequired && !auth.isAuthenticated) {

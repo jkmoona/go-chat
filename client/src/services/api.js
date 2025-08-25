@@ -1,18 +1,18 @@
-export async function apiFetch(url, options = {}) {
-    const res = await fetch(url, { ...options, credentials: "include" });
+import { SERVER_URL } from "./constants";
+
+export async function apiFetch(path, options = {}) {
+    const res = await fetch(`${SERVER_URL}/${path}`, { ...options, credentials: "include" });
     if (res.status === 401) {
-        // Try refresh
         const refreshed = await refreshToken();
         if (refreshed) {
-            // Retry original request
-            return fetch(url, { ...options, credentials: "include" });
+            res = await fetch(`${SERVER_URL}/${path}`, { ...options, credentials: "include" });
         }
     }
     return res;
 }
 
 export async function refreshToken() {
-    const res = await fetch("http://localhost:8080/refresh", {
+    const res = await fetch(`${SERVER_URL}/refresh`, {
         method: "POST",
         credentials: "include",
     });

@@ -1,24 +1,27 @@
 <template>
     <div class="max-w-2xl mx-auto p-6">
-        <h1 class="text-2xl font-bold mb-6">Chat Rooms</h1>
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold">Chat Rooms</h1>
+            <button
+                @click="logout"
+                class="bg-red-600 text-white px-3 py-1 rounded cursor-pointer"
+            >
+                Log Out
+            </button>
+        </div>
 
-        <!-- Create Room Form -->
         <div class="mb-8">
             <h2 class="text-lg font-semibold mb-2">Create a Room</h2>
             <form @submit.prevent="createRoom" class="flex gap-2">
-                <input
-                    v-model="newid"
-                    placeholder="Room ID"
-                    class="flex-1 border rounded p-2"
-                    required
-                />
                 <input
                     v-model="newRoomName"
                     placeholder="Room Name"
                     class="flex-1 border rounded p-2"
                     required
                 />
-                <button class="bg-green-600 text-white px-4 py-2 rounded">
+                <button
+                    class="bg-green-600 text-white px-4 py-2 rounded cursor-pointer"
+                >
                     Create
                 </button>
             </form>
@@ -30,7 +33,6 @@
             </p>
         </div>
 
-        <!-- Room List -->
         <div>
             <h2 class="text-lg font-semibold mb-2">Available Rooms</h2>
             <ul class="space-y-2">
@@ -45,7 +47,7 @@
                     </div>
                     <button
                         @click="joinRoom(room.id)"
-                        class="bg-blue-600 text-white px-3 py-1 rounded"
+                        class="bg-blue-600 text-white px-3 py-1 rounded cursor-pointer"
                     >
                         Join
                     </button>
@@ -63,7 +65,6 @@ import { useAuthStore } from "../stores/auth";
 import { apiFetch } from "../services/api";
 
 const rooms = ref([]);
-const newid = ref("");
 const newRoomName = ref("");
 const createError = ref("");
 const createSuccess = ref("");
@@ -73,8 +74,16 @@ const auth = useAuthStore();
 
 async function fetchRooms() {
     try {
-        const res = await apiFetch("http://localhost:8080/ws/getRooms");
-        if (!res.ok) throw new Error("Could not load rooms");
+        const res = await apiFetch("/ws/getRooms");
+        if (!res.ok) {
+            if (res.status === 401) {
+                auth.logout();
+                router.push("/login");
+                return;
+            }
+            throw new Error("Failed to load rooms");
+
+        }
         rooms.value = await res.json();
     } catch (err) {
         loadError.value = err.message;
@@ -86,13 +95,12 @@ async function createRoom() {
     createSuccess.value = "";
 
     try {
-        const res = await apiFetch("http://localhost:8080/ws/createRoom", {
+        const res = await apiFetch("/ws/createRoom", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                id: newid.value,
                 name: newRoomName.value,
             }),
         });
@@ -103,9 +111,8 @@ async function createRoom() {
         }
 
         createSuccess.value = `Room "${newRoomName.value}" created successfully!`;
-        newid.value = "";
         newRoomName.value = "";
-        fetchRooms(); // refresh room list
+        fetchRooms();
     } catch (err) {
         createError.value = err.error;
     }
@@ -113,6 +120,11 @@ async function createRoom() {
 
 function joinRoom(id) {
     router.push(`/room/${id}`);
+}
+
+function logout() {
+    auth.logout();
+    router.push("/login");
 }
 
 onMounted(fetchRooms);

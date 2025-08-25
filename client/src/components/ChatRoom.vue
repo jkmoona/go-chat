@@ -2,7 +2,7 @@
     <div class="max-w-2xl mx-auto p-4">
         <h1 class="text-xl font-bold mb-4">Room: {{ roomId }}</h1>
 
-        <div
+        <div 
             class="border rounded h-64 overflow-y-auto p-3 bg-gray-50 mb-4 flex flex-col gap-2"
         >
             <div
@@ -28,7 +28,9 @@
                     ]"
                 >
                     <span
-                        v-if="msg.type !== 'system' && msg.username !== username"
+                        v-if="
+                            msg.type !== 'system' && msg.username !== username
+                        "
                         class="font-semibold mr-2"
                         >{{ msg.username }}:</span
                     >
@@ -47,7 +49,7 @@
             />
             <button
                 :disabled="!newMessage.trim()"
-                class="bg-blue-600 text-white px-4 py-2 rounded"
+                class="bg-blue-600 text-white px-4 py-2 rounded cursor-pointer"
             >
                 Send
             </button>
@@ -76,8 +78,15 @@ function scrollToBottom() {
     bottomEl.value?.scrollIntoView({ behavior: "smooth" });
 }
 
-function connectSocket() {
-    const wsUrl = `ws://localhost:8080/ws/joinRoom/${roomId}`;
+async function connectSocket() {
+    await auth.tryRefresh();
+
+    if (socket) {
+        socket.close();
+        socket = null;
+    }
+
+    const wsUrl = `ws://localhost:8080/ws/joinRoom/${roomId}?userId=${userId}&username=${username}`;
     socket = new WebSocket(wsUrl);
 
     socket.onopen = () => console.log("✅ WebSocket connected");
@@ -86,25 +95,55 @@ function connectSocket() {
         try {
             msg = JSON.parse(event.data);
         } catch {
-            msg = { type: "system", content: event.data };
+            msg = { type: "system", content: msg.content };
         }
         messages.value.push(msg);
         await nextTick();
         scrollToBottom();
     };
     socket.onerror = (err) => console.error("WebSocket error:", err);
-    socket.onclose = () => console.log("❌ WebSocket closed");
+    socket.onclose = async () => {
+        console.log("❌ WebSocket closed");
+    };
 }
 
-function send() {
+async function send() {
     if (!newMessage.value.trim()) return;
+
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+        messages.value.push({
+            type: "system",
+            content: "Connection lost. Trying to reconnect...",
+        });
+        connectSocket();
+        return;
+    }
+
     const msg = {
         type: "chat",
         username,
         content: newMessage.value,
         roomId,
     };
-    socket.send(JSON.stringify(msg));
+
+    try {
+        socket.send(JSON.stringify(msg));
+        messages.value.push({
+            type: "chat",
+            username,
+            content: newMessage.value,
+        });
+        await nextTick();
+        scrollToBottom();
+        newMessage.value = "";
+    } catch (err) {
+        messages.value.push({
+            type: "system",
+            content: "Failed to send message. Please try again.",
+        });
+        console.error("Failed to send message:", err);
+    }
+
     newMessage.value = "";
 }
 
@@ -114,6 +153,9 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-    socket?.close();
+    if (socket) {
+        socket.close();
+        socket = null;
+    }
 });
 </script>

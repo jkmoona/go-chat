@@ -3,17 +3,17 @@ import { apiFetch, refreshToken } from "../services/api";
 
 export const useAuthStore = defineStore("auth", {
     state: () => ({
-        user: null,
-        isAuthenticated: false,
+        user: JSON.parse(localStorage.getItem('user')) || null,
+        isAuthenticated: !!localStorage.getItem('user'),
     }),
     actions: {
-        async login(email, password) {
+        async login(username, password) {
             try {
-                const res = await apiFetch("http://localhost:8080/login", {
+                const res = await apiFetch("/login", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        email: email.trim(),
+                        username: username.trim(),
                         password: password.trim(),
                     }),
                 });
@@ -21,6 +21,7 @@ export const useAuthStore = defineStore("auth", {
                 if (res.ok) {
                     this.user = data;
                     this.isAuthenticated = true;
+                    localStorage.setItem('user', JSON.stringify(data));
                 } else {
                     throw new Error(data.error || "Login failed.");
                 }
@@ -30,19 +31,18 @@ export const useAuthStore = defineStore("auth", {
                 throw new Error(err.message || "Network error. Please try again.");
             }
         },
-        async register(username, email, password) {
+        async register(username, password) {
             try {
-                const res = await apiFetch("http://localhost:8080/signup", {
+                const res = await apiFetch("/register", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         username: username.trim(),
-                        email: email.trim(),
                         password: password.trim(),
                     }),
                 });
                 const data = await res.json();
-                if (res.ok && data.id && data.username && data.email) {
+                if (res.ok && data.id && data.username) {
                     this.user = null;
                     this.isAuthenticated = false;
                 } else {
@@ -55,11 +55,13 @@ export const useAuthStore = defineStore("auth", {
             }
         },
         async logout() {
-            await apiFetch("http://localhost:8080/logout", {
+            await apiFetch("/logout", {
                 method: "GET",
             });
             this.user = null;
             this.isAuthenticated = false;
+            localStorage.removeItem('user');
+            
         },
         async tryRefresh() {
             const ok = await refreshToken();
