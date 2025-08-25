@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/jkmoona/go-chat/server/db"
 	"github.com/jkmoona/go-chat/server/internal/user"
@@ -29,6 +30,12 @@ func main() {
 	go hub.Run()
 
 	router.InitRouter(userHandler, wsHandler)
-	router.Start("localhost:8080")
 
+	// Use Railway port when available
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	log.Printf("Listening on port %s...", port)
+	router.Start(":" + port)
 }

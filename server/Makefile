@@ -18,4 +18,7 @@ migrateup:
 migratedown:
 	migrate -path db/migrations -database "postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable" -verbose down
 
+all: 
+	postgresinit createdb migrateup
+
 .PHONY: postgresinit postgres createdb dropdb migrateup migratedown
