@@ -2,7 +2,7 @@
     <div class="max-w-2xl mx-auto p-4">
         <h1 class="text-xl font-bold mb-4">Room: {{ roomId }}</h1>
 
-        <div 
+        <div
             class="border rounded h-64 overflow-y-auto p-3 bg-gray-50 mb-4 flex flex-col gap-2"
         >
             <div
@@ -61,6 +61,7 @@
 import { ref, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { useRoute } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import { WS_URL } from "../services/constants";
 
 const route = useRoute();
 const roomId = route.params.roomId;
@@ -86,7 +87,7 @@ async function connectSocket() {
         socket = null;
     }
 
-    const wsUrl = `ws://localhost:8080/ws/joinRoom/${roomId}?userId=${userId}&username=${username}`;
+    const wsUrl = `${WS_URL}/ws/joinRoom/${roomId}?userId=${userId}&username=${username}`;
     socket = new WebSocket(wsUrl);
 
     socket.onopen = () => console.log("✅ WebSocket connected");
