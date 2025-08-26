@@ -2,6 +2,7 @@ package ws
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -128,5 +129,9 @@ func (h *Handler) GetClients(c *gin.Context) {
 }
 
 func checkOrigin(r *http.Request) bool {
-	return r.Header.Get("Origin") == "http://localhost:5173"
+	clientURL := os.Getenv("CLIENT_URL")
+	if clientURL == "" {
+		clientURL = "http://localhost:5173"
+	}
+	return r.Header.Get("Origin") == clientURL
 }
