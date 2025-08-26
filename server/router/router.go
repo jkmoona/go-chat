@@ -1,14 +1,15 @@
 package router
 
 import (
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+
 	"github.com/jkmoona/go-chat/server/internal/auth"
 	"github.com/jkmoona/go-chat/server/internal/user"
 	"github.com/jkmoona/go-chat/server/internal/ws"
 
+	"os"
 	"time"
-
-	"github.com/gin-contrib/cors"
 )
 
 var r *gin.Engine
@@ -16,8 +17,13 @@ var r *gin.Engine
 func InitRouter(userHandler *user.Handler, wsHandler *ws.Handler) {
 	r = gin.Default()
 
+	clientURL := os.Getenv("CLIENT_URL")
+	if clientURL == "" {
+		clientURL = "http://localhost:5173"
+	}
+
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"https://tempchatgo.netlify.app"},
+		AllowOrigins:     []string{clientURL},
 		AllowMethods:     []string{"GET", "POST", "OPTIONS"},
 		AllowHeaders:     []string{"Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},
