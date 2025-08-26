@@ -17,7 +17,7 @@
                         class="mt-1 p-0.5 block w-full bg-neutral-800 border-neutral-600 text-white rounded-md shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                     />
                 </div>
-                <div class="mb-6">
+                <div class="mb-4">
                     <label
                         for="password"
                         class="block text-sm font-medium text-neutral-300"

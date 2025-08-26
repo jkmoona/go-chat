@@ -5,7 +5,9 @@ export async function apiFetch(path, options = {}) {
     if (res.status === 401) {
         const refreshed = await refreshToken();
         if (refreshed) {
-            res = await fetch(`${SERVER_URL}/${path}`, { ...options, credentials: "include" });
+            console.log("why refresh??");
+            
+            res = await fetch(`${SERVER_URL}${path}`, { ...options, credentials: "include" });
         }
     }
     return res;
