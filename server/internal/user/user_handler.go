@@ -3,6 +3,7 @@ package user
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -15,8 +16,16 @@ type Handler struct {
 	Service
 }
 
-// fetch client url to set cookie domain
-var clientURL = os.Getenv("CLIENT_URL")
+var domain string
+
+func init() {
+	clientURL := os.Getenv("CLIENT_URL")
+	u, err := url.Parse(clientURL)
+	if err != nil {
+		panic("err parsing CLIENT_URL")
+	}
+	domain = u.Hostname()
+}
 
 func NewHandler(s Service) *Handler {
 	return &Handler{
@@ -66,8 +75,8 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	c.SetSameSite(http.SameSiteNoneMode)
-	c.SetCookie("access_token", u.AccessToken, 900, "/", clientURL, true, true)
-	c.SetCookie("refresh_token", u.RefreshToken, 86400, "/", clientURL, true, true)
+	c.SetCookie("access_token", u.AccessToken, 900, "/", domain, true, true)
+	c.SetCookie("refresh_token", u.RefreshToken, 86400, "/", domain, true, true)
 
 	res := &LoginUserRes{
 		Username: u.Username,
@@ -78,8 +87,8 @@ func (h *Handler) Login(c *gin.Context) {
 
 func (h *Handler) Logout(c *gin.Context) {
 	c.SetSameSite(http.SameSiteNoneMode)
-	c.SetCookie("access_token", "", -1, "/", clientURL, true, true)
-	c.SetCookie("refresh_token", "", -1, "/", clientURL, true, true)
+	c.SetCookie("access_token", "", -1, "/", domain, true, true)
+	c.SetCookie("refresh_token", "", -1, "/", domain, true, true)
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
 }
 
@@ -105,7 +114,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	}
 
 	c.SetSameSite(http.SameSiteNoneMode)
-	c.SetCookie("access_token", accessToken, 900, "/", clientURL, true, true)
+	c.SetCookie("access_token", accessToken, 900, "/", domain, true, true)
 	c.JSON(http.StatusOK, gin.H{"success": "access token refreshed successfully"})
 
 }
