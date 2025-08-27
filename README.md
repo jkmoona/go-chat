@@ -29,6 +29,15 @@ npm install
 npm run dev
 ```
 
+## Cleanup
+
+To stop and remove all containers, networks, and volumes created by this project:
+
+```sh
+cd server
+docker compose down -v
+```
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
