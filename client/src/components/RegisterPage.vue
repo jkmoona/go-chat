@@ -59,7 +59,7 @@
     </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useRouter } from "vue-router";
@@ -82,8 +82,12 @@ const register = async () => {
         setTimeout(() => {
             router.push("/login");
         }, 1200);
-    } catch (err) {
-        error.value = err.message;
+    } catch (err: unknown) {
+        if (err instanceof Error) {
+            error.value = err.message;
+        } else {
+            error.value = String(err);
+        }
     } finally {
         loading.value = false;
     }

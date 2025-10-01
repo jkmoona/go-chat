@@ -71,7 +71,7 @@
     </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
@@ -82,15 +82,23 @@ const route = useRoute();
 const router = useRouter();
 const roomStore = useRoomStore();
 const roomId = route.params.roomId;
-const newMessage = ref("");
-const messages = ref([]);
-const bottomEl = ref(null);
-const inputEl = ref(null);
-let socket;
-
 const auth = useAuthStore();
+
 const username = auth.user?.username || "guest";
 const userId = auth.user?.id || "guest";
+
+interface ChatMessage {
+    type: string;
+    username?: string;
+    content: string;
+    roomId?: string;
+}
+
+const newMessage = ref<string>("");
+const messages = ref<ChatMessage[]>([]);
+const bottomEl = ref<HTMLElement | null>(null);
+const inputEl = ref<HTMLInputElement | null>(null);
+let socket: WebSocket | null = null;
 
 function scrollToBottom() {
     bottomEl.value?.scrollIntoView({ behavior: "smooth" });
@@ -108,18 +116,18 @@ async function connectSocket() {
     socket = new WebSocket(wsUrl);
 
     socket.onopen = () => console.log("✅ WebSocket connected");
-    socket.onmessage = async (event) => {
-        let msg;
+    socket.onmessage = async (event: MessageEvent) => {
+        let msg: ChatMessage;
         try {
             msg = JSON.parse(event.data);
         } catch {
-            msg = { type: "system", content: msg.content };
+            msg = { type: "system", content: event.data };
         }
         messages.value.push(msg);
         await nextTick();
         scrollToBottom();
     };
-    socket.onerror = (err) => console.error("WebSocket error:", err);
+    socket.onerror = (err: Event) => console.error("WebSocket error:", err);
     socket.onclose = async () => {
         console.log("❌ WebSocket closed");
     };
@@ -137,11 +145,11 @@ async function send() {
         return;
     }
 
-    const msg = {
+    const msg: ChatMessage = {
         type: "chat",
         username,
         content: newMessage.value,
-        roomId,
+        roomId: roomId as string,
     };
 
     try {

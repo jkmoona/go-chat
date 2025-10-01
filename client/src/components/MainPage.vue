@@ -58,18 +58,17 @@
     </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { apiFetch } from "../services/api";
 import { useRoomStore } from "../stores/room";
 
-const rooms = ref([]);
-const newRoomName = ref("");
-const createError = ref("");
-const createSuccess = ref("");
-const loadError = ref("");
+const newRoomName = ref<string>("");
+const createError = ref<string>("");
+const createSuccess = ref<string>("");
+const loadError = ref<string>("");
 const router = useRouter();
 const auth = useAuthStore();
 const roomStore = useRoomStore();
@@ -79,16 +78,20 @@ async function fetchRooms() {
         const res = await apiFetch("/ws/getRooms");
         if (!res.ok) {
             if (res.status === 401) {
-                auth.logout();
+                await auth.logout();
                 router.push("/login");
                 return;
             }
             throw new Error("Failed to load rooms");
-
         }
-        roomStore.rooms = await res.json();
-    } catch (err) {
-        loadError.value = err.message;
+        const rooms = await res.json();
+        roomStore.rooms = rooms;
+    } catch (err: unknown) {
+        if (err instanceof Error) {
+            loadError.value = err.message;
+        } else {
+            loadError.value = String(err);
+        }
     }
 }
 
@@ -108,19 +111,23 @@ async function createRoom() {
         });
 
         if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.error || "Failed to create room");
+            const errData = await res.json();
+            throw new Error(errData.error || "Failed to create room");
         }
 
         createSuccess.value = `Room "${newRoomName.value}" created successfully!`;
         newRoomName.value = "";
         fetchRooms();
-    } catch (err) {
-        createError.value = err.error;
+    } catch (err: unknown) {
+        if (err instanceof Error) {
+            createError.value = err.message;
+        } else {
+            createError.value = String(err);
+        }
     }
 }
 
-function joinRoom(roomId, roomName) {
+function joinRoom(roomId: string, roomName: string) {
     roomStore.setRoom(roomId, roomName);
     router.push(`/room/${roomId}`);
 }

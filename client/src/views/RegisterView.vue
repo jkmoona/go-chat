@@ -1,7 +1,7 @@
 <template>
- <RegisterPage />
+    <RegisterPage />
 </template>
 
-<script setup>
-    import RegisterPage from '../components/RegisterPage.vue';
+<script setup lang="ts">
+import RegisterPage from "../components/RegisterPage.vue";
 </script>

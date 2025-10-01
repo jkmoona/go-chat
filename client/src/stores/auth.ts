@@ -1,13 +1,18 @@
 import { defineStore } from "pinia";
 import { apiFetch, refreshToken } from "../services/api";
 
+interface User {
+    id: string;
+    username: string;
+}
+
 export const useAuthStore = defineStore("auth", {
     state: () => ({
-        user: JSON.parse(localStorage.getItem('user')) || null,
+        user: JSON.parse(localStorage.getItem('user') || 'null') as User | null,
         isAuthenticated: !!localStorage.getItem('user'),
     }),
     actions: {
-        async login(username, password) {
+        async login(username: string, password: string) {
             try {
                 const res = await apiFetch("/login", {
                     method: "POST",
@@ -25,13 +30,17 @@ export const useAuthStore = defineStore("auth", {
                 } else {
                     throw new Error(data.error || "Login failed.");
                 }
-            } catch (err) {
+            } catch (err: unknown) {
                 this.user = null;
                 this.isAuthenticated = false;
-                throw new Error(err.message || "Network error. Please try again.");
+                if (err instanceof Error) {
+                    throw new Error(err.message || "Network error. Please try again.");
+                } else {
+                    throw new Error("Network error. Please try again.");
+                }
             }
         },
-        async register(username, password) {
+        async register(username: string, password: string) {
             try {
                 const res = await apiFetch("/register", {
                     method: "POST",
@@ -48,10 +57,14 @@ export const useAuthStore = defineStore("auth", {
                 } else {
                     throw new Error(data.error || "Registration failed.");
                 }
-            } catch (err){
+            } catch (err: unknown){
                 this.user = null;
                 this.isAuthenticated = false;
-                throw new Error(err.message || "Network error. Please try again.");
+                if (err instanceof Error) {
+                    throw new Error(err.message || "Network error. Please try again.");
+                } else {
+                    throw new Error("Network error. Please try again.");
+                }
             }
         },
         async logout() {
@@ -61,7 +74,6 @@ export const useAuthStore = defineStore("auth", {
             this.user = null;
             this.isAuthenticated = false;
             localStorage.removeItem('user');
-            
         },
         async tryRefresh() {
             const ok = await refreshToken();

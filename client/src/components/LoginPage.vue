@@ -1,7 +1,11 @@
 <template>
-    <div class="flex flex-col items-center justify-center min-h-screen bg-neutral-900">
+    <div
+        class="flex flex-col items-center justify-center min-h-screen bg-neutral-900"
+    >
         <div class="w-96 p-8">
-            <h1 class="text-3xl font-bold mb-6 text-white text-center">Login</h1>
+            <h1 class="text-3xl font-bold mb-6 text-white text-center">
+                Login
+            </h1>
             <form @submit.prevent="login" class="w-full">
                 <div class="mb-4">
                     <label
@@ -45,12 +49,14 @@
                     >Register</a
                 >
             </p>
-            <p v-if="error" class="mt-4 text-red-400 text-center">{{ error }}</p>
+            <p v-if="error" class="mt-4 text-red-400 text-center">
+                {{ error }}
+            </p>
         </div>
     </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useRouter } from "vue-router";
@@ -68,8 +74,12 @@ const login = async () => {
     try {
         await auth.login(username.value, password.value);
         router.push("/");
-    } catch (err) {
-        error.value = err.message;
+    } catch (err: unknown) {
+        if (err instanceof Error) {
+            error.value = err.message;
+        } else {
+            error.value = String(err);
+        }
     } finally {
         loading.value = false;
     }
