@@ -29,11 +29,11 @@
             </Card>
 
             <!-- Rooms -->
-            <Card class="flex-1 min-h-0 flex flex-col">
+            <Card class="flex-1 min-h-0 flex flex-col m-0">
                 <CardHeader class="shrink-0">
                     <CardTitle class="text-lg">Available Rooms</CardTitle>
                 </CardHeader>
-                <CardContent class="flex-1 min-h-0 grid gap-2 overflow-y-auto pt-0.5">
+                <CardContent class="flex-1 min-h-0 flex flex-col space-y-2 overflow-y-auto pt-0.5">
                     <div
                         v-for="room in roomStore.rooms"
                         :key="room.id"
