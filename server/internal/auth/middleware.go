@@ -48,7 +48,8 @@ func handleTokenRefresh(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to generate new access token"})
 		return
 	}
-	c.SetCookie("access_token", newAccessToken, 900, "/", "localhost", true, true)
+	c.SetSameSite(http.SameSiteNoneMode)
+	c.SetCookie("access_token", newAccessToken, 900, "/", "", true, true)
 	c.Set("userId", claims.ID)
 	c.Set("username", claims.Username)
 	c.Next()
