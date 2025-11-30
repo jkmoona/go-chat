@@ -9,6 +9,7 @@
                 <LoadingButton
                     @click="leaveRoom"
                     variant="destructive"
+                    :loading="loading"
                     loading-text="Leaving..."
                 >
                     <LogOut class="size-4" /> Leave
