@@ -37,5 +37,5 @@ func main() {
 		port = "8080"
 	}
 	log.Printf("Listening on port %s...", port)
-	router.Start("[::]:" + port)
+	router.Start(":" + port)
 }
