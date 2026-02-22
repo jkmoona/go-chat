@@ -11,6 +11,7 @@ const routes: RouteRecordRaw[] = [
     { path: "/room/:roomId", name: "Room", component: RoomView },
     { path: "/login", name: "Login", component: LoginView },
     { path: "/register", name: "Register", component: RegisterView },
+    { path: "/:pathMatch(.*)*", redirect: "/" },
 ];
 
 const router = createRouter({

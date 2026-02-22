@@ -81,7 +81,6 @@ import LoadingButton from "@/components/LoadingButton.vue";
 
 const newRoomName = ref("");
 const createError = ref("");
-const createSuccess = ref("");
 const loadError = ref("");
 const router = useRouter();
 const auth = useAuthStore();
@@ -107,8 +106,6 @@ async function fetchRooms() {
 
 async function createRoom() {
     createError.value = "";
-    createSuccess.value = "";
-
     try {
         const res = await apiFetch("/ws/createRoom", {
             method: "POST",
@@ -129,7 +126,7 @@ async function createRoom() {
         fetchRooms();
     } catch (err: unknown) {
         createError.value = err instanceof Error ? err.message : String(err);
-        toast.success("Failed to create room", {
+        toast.error("Failed to create room", {
             description: createError.value,
             duration: 1000,
         });
@@ -141,13 +138,11 @@ function joinRoom(roomId: string, roomName: string) {
     router.push(`/room/${roomId}`);
 }
 
-function logout() {
-    loading.value = true
-    setTimeout(() => {
-        auth.logout();
-        router.push("/login");
-        loading.value = false
-    }, 1000)
+async function logout() {
+    loading.value = true;
+    await auth.logout();
+    router.push("/login");
+    loading.value = false;
 }
 
 onMounted(fetchRooms);

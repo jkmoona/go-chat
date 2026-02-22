@@ -16,7 +16,7 @@
                             <Label for="username">Username</Label>
                             <Input
                                 id="username"
-                                type="username"
+                                type="text"
                                 placeholder="guest"
                                 v-model="username"
                                 required

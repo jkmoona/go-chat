@@ -106,7 +106,12 @@ async function connectSocket() {
         scrollToBottom();
     };
     socket.onerror = (err: Event) => console.error("WebSocket error:", err);
-    socket.onclose = () => console.log("WebSocket closed");
+    socket.onclose = () => {
+        messages.value.push({
+            type: "system",
+            content: "Disconnected from chat.",
+        });
+    };
 }
 
 async function send() {
@@ -141,8 +146,6 @@ async function send() {
         });
         console.error("Failed to send message:", err);
     }
-
-    newMessage.value = "";
 }
 
 const leaveRoom = () => {

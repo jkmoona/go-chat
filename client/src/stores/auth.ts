@@ -83,6 +83,7 @@ export const useAuthStore = defineStore("auth", {
             }
             this.isAuthenticated = false;
             this.user = null;
+            localStorage.removeItem('user');
             return false;
         },
     },

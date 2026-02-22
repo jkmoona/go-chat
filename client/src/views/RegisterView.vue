@@ -16,10 +16,12 @@
                             <Label for="username">Username</Label>
                             <Input
                                 id="username"
-                                type="username"
+                                type="text"
                                 placeholder="guest"
                                 v-model="username"
                                 required
+                                minlength="3"
+                                maxlength="30"
                             />
                         </div>
                         <Label for="password">Password</Label>
@@ -28,6 +30,8 @@
                             type="password"
                             v-model="password"
                             required
+                            minlength="6"
+                            maxlength="72"
                         />
                         <LoadingButton
                             type="submit"
@@ -69,14 +73,12 @@ import { useRouter } from "vue-router";
 const username = ref("");
 const password = ref("");
 const error = ref("");
-const success = ref("");
 const loading = ref(false);
 const auth = useAuthStore();
 const router = useRouter();
 
 const register = async () => {
     error.value = "";
-    success.value = "";
     loading.value = true;
     try {
         await auth.register(username.value, password.value);
