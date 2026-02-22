@@ -1,6 +1,8 @@
 package router
 
 import (
+	"net/http"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
@@ -22,6 +24,7 @@ func InitRouter(userHandler *user.Handler, wsHandler *ws.Handler) {
 		clientURL = "http://localhost:5173"
 	}
 
+	r.Use(securityHeaders())
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{clientURL},
 		AllowMethods:     []string{"GET", "POST", "OPTIONS"},
@@ -30,6 +33,10 @@ func InitRouter(userHandler *user.Handler, wsHandler *ws.Handler) {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
+
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+	})
 
 	r.POST("/register", userHandler.CreateUser)
 	r.POST("/login", userHandler.Login)
@@ -48,4 +55,12 @@ func InitRouter(userHandler *user.Handler, wsHandler *ws.Handler) {
 
 func Start(addr string) error {
 	return r.Run(addr)
+}
+
+func securityHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-Frame-Options", "DENY")
+		c.Next()
+	}
 }
