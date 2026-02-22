@@ -5,12 +5,12 @@ import "context"
 type User struct {
 	ID       int64  `json:"id" db:"id"`
 	Username string `json:"username" db:"username"`
-	Password string `json:"password" db:"password"`
+	Password string `json:"-" db:"password"`
 }
 
 type CreateUserReq struct {
-	Username string `json:"username" db:"username"`
-	Password string `json:"password" db:"password"`
+	Username string `json:"username" binding:"required,min=3,max=30"`
+	Password string `json:"password" binding:"required,min=6,max=72"`
 }
 
 type CreateUserRes struct {
@@ -19,8 +19,8 @@ type CreateUserRes struct {
 }
 
 type LoginUserReq struct {
-	Username string `json:"username" db:"username"`
-	Password string `json:"password" db:"password"`
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
 }
 
 type LoginUserRes struct {

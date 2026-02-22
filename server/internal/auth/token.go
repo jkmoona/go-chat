@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"errors"
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -18,14 +20,14 @@ func getAccessSecret() string {
 	secret := os.Getenv("ACCESS_TOKEN_SECRET")
 
 	if secret == "" {
-		panic("ACCESS_TOKEN_SECRET environment variable not set")
+		log.Fatal("ACCESS_TOKEN_SECRET environment variable not set")
 	}
 	return secret
 }
 func getRefreshSecret() string {
 	secret := os.Getenv("REFRESH_TOKEN_SECRET")
 	if secret == "" {
-		panic("REFRESH_TOKEN_SECRET environment variable not set")
+		log.Fatal("REFRESH_TOKEN_SECRET environment variable not set")
 	}
 	return secret
 }
@@ -70,7 +72,7 @@ func ValidateAccessToken(tokenStr string) (*MyJWTClaims, error) {
 
 	claims, ok := token.Claims.(*MyJWTClaims)
 	if !ok || !token.Valid {
-		return nil, err
+		return nil, errors.New("invalid token")
 	}
 	return claims, nil
 }
@@ -84,7 +86,7 @@ func ValidateRefreshToken(tokenStr string) (*MyJWTClaims, error) {
 	}
 	claims, ok := token.Claims.(*MyJWTClaims)
 	if !ok || !token.Valid {
-		return nil, err
+		return nil, errors.New("invalid token")
 	}
 	return claims, nil
 }

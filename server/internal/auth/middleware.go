@@ -42,7 +42,11 @@ func handleTokenRefresh(c *gin.Context) {
 		return
 	}
 
-	userID, _ := strconv.ParseInt(claims.ID, 10, 64)
+	userID, err := strconv.ParseInt(claims.ID, 10, 64)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
 	newAccessToken, err := GenerateAccessToken(userID, claims.Username, 15*time.Minute)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to generate new access token"})

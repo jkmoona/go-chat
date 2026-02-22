@@ -23,7 +23,7 @@ func NewHandler(s Service) *Handler {
 func (h *Handler) CreateUser(c *gin.Context) {
 	var u CreateUserReq
 	if err := c.ShouldBindJSON(&u); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username must be 3-30 characters and password must be 6-72 characters"})
 		return
 	}
 
@@ -92,7 +92,11 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	userID, _ := strconv.ParseInt(claims.ID, 10, 64)
+	userID, err := strconv.ParseInt(claims.ID, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
 
 	accessToken, err := auth.GenerateAccessToken(userID, claims.Username, 15*time.Minute)
 	if err != nil {

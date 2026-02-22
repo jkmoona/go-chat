@@ -1,5 +1,7 @@
 package ws
 
+import "sync"
+
 type Room struct {
 	ID      string             `json:"id"`
 	Name    string             `json:"name"`
@@ -8,9 +10,11 @@ type Room struct {
 
 type Hub struct {
 	Rooms      map[string]*Room
+	mu         sync.RWMutex
 	Register   chan *Client
 	Unregister chan *Client
 	Broadcast  chan *Message
+	CreateRoom chan *Room
 }
 
 func NewHub() *Hub {
@@ -19,44 +23,63 @@ func NewHub() *Hub {
 		Register:   make(chan *Client),
 		Unregister: make(chan *Client),
 		Broadcast:  make(chan *Message, 5),
+		CreateRoom: make(chan *Room),
 	}
 }
 
 func (h *Hub) Run() {
 	for {
 		select {
+		case room := <-h.CreateRoom:
+			h.mu.Lock()
+			h.Rooms[room.ID] = room
+			h.mu.Unlock()
 		case cl := <-h.Register:
-			if _, ok := h.Rooms[cl.RoomID]; ok {
-				r := h.Rooms[cl.RoomID]
-
-				if _, ok := r.Clients[cl.ID]; !ok {
+			h.mu.Lock()
+			if r, ok := h.Rooms[cl.RoomID]; ok {
+				if _, exists := r.Clients[cl.ID]; !exists {
 					r.Clients[cl.ID] = cl
 				}
 			}
+			h.mu.Unlock()
 		case cl := <-h.Unregister:
-			if _, ok := h.Rooms[cl.RoomID]; ok {
-				if _, ok := h.Rooms[cl.RoomID].Clients[cl.ID]; ok {
-					if len(h.Rooms[cl.RoomID].Clients) != 0 {
-						h.Broadcast <- &Message{
+			var leaveMsg *Message
+			h.mu.Lock()
+			if r, ok := h.Rooms[cl.RoomID]; ok {
+				if _, exists := r.Clients[cl.ID]; exists {
+					if len(r.Clients) != 0 {
+						leaveMsg = &Message{
 							Content:  cl.Username + " left the chat",
 							RoomID:   cl.RoomID,
 							Username: cl.Username,
 							Type:     "system",
 						}
 					}
-					delete(h.Rooms[cl.RoomID].Clients, cl.ID)
+					delete(r.Clients, cl.ID)
 					close(cl.Message)
-				}
-			}
-
-		case m := <-h.Broadcast:
-			if _, ok := h.Rooms[m.RoomID]; ok {
-				for _, cl := range h.Rooms[m.RoomID].Clients {
-					if cl.Username != m.Username {
-						cl.Message <- m
+					if len(r.Clients) == 0 {
+						delete(h.Rooms, cl.RoomID)
 					}
 				}
 			}
+			h.mu.Unlock()
+			if leaveMsg != nil {
+				h.Broadcast <- leaveMsg
+			}
+
+		case m := <-h.Broadcast:
+			h.mu.RLock()
+			if r, ok := h.Rooms[m.RoomID]; ok {
+				for _, cl := range r.Clients {
+					if cl.Username != m.Username {
+						select {
+						case cl.Message <- m:
+						default:
+						}
+					}
+				}
+			}
+			h.mu.RUnlock()
 		}
 	}
 }

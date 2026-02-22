@@ -32,7 +32,9 @@ func (c *Client) writeMessage() {
 		if !ok {
 			return
 		}
-		c.Conn.WriteJSON(message)
+		if err := c.Conn.WriteJSON(message); err != nil {
+			return
+		}
 	}
 }
 

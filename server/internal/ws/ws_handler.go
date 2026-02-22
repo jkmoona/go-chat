@@ -3,6 +3,7 @@ package ws
 import (
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -46,31 +47,47 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 		return
 	}
 
+	name := strings.TrimSpace(req.Name)
+	if name == "" || len(name) > 100 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "room name must be between 1 and 100 characters"})
+		return
+	}
+
 	roomID, err := gonanoid.New(6)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate room id"})
 		return
 	}
 
-	h.hub.Rooms[roomID] = &Room{
+	room := &Room{
 		ID:      roomID,
-		Name:    req.Name,
+		Name:    name,
 		Clients: make(map[string]*Client),
 	}
+	h.hub.CreateRoom <- room
 
 	c.JSON(http.StatusOK, RoomRes{
 		ID:   roomID,
-		Name: req.Name,
+		Name: name,
 	})
 }
 
 func (h *Handler) JoinRoom(c *gin.Context) {
+	roomID := c.Param("roomId")
+
+	h.hub.mu.RLock()
+	_, exists := h.hub.Rooms[roomID]
+	h.hub.mu.RUnlock()
+	if !exists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+		return
+	}
+
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	roomID := c.Param("roomId")
 	clientID := c.Query("userId")
 	username := c.Query("username")
 
@@ -99,12 +116,14 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 func (h *Handler) GetRooms(c *gin.Context) {
 	rooms := make([]RoomRes, 0)
 
+	h.hub.mu.RLock()
 	for _, r := range h.hub.Rooms {
 		rooms = append(rooms, RoomRes{
 			ID:   r.ID,
 			Name: r.Name,
 		})
 	}
+	h.hub.mu.RUnlock()
 
 	c.JSON(http.StatusOK, rooms)
 }
@@ -113,17 +132,22 @@ func (h *Handler) GetClients(c *gin.Context) {
 	var clients []ClientRes
 	roomId := c.Param("roomId")
 
-	if _, ok := h.hub.Rooms[roomId]; !ok {
+	h.hub.mu.RLock()
+	room, ok := h.hub.Rooms[roomId]
+	if !ok {
+		h.hub.mu.RUnlock()
 		clients = make([]ClientRes, 0)
 		c.JSON(http.StatusOK, clients)
+		return
 	}
 
-	for _, c := range h.hub.Rooms[roomId].Clients {
+	for _, cl := range room.Clients {
 		clients = append(clients, ClientRes{
-			ID:       c.ID,
-			Username: c.Username,
+			ID:       cl.ID,
+			Username: cl.Username,
 		})
 	}
+	h.hub.mu.RUnlock()
 
 	c.JSON(http.StatusOK, clients)
 }
