@@ -1,20 +1,19 @@
-
-FROM golang:1.25 AS backend-builder
+FROM golang:1.24-alpine AS builder
 WORKDIR /app
-RUN apt-get update && apt-get install --no-install-recommends -y git
-COPY go.mod go.sum ./server/
-WORKDIR /app/server
+RUN apk add --no-cache curl
+COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /go-chat ./cmd
+RUN ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') && \
+    curl -fsSL "https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-${ARCH}.tar.gz" \
+    | tar -xz -C /usr/local/bin
 
 FROM alpine:3.20
-RUN apk add --no-cache postgresql-client curl ca-certificates
-RUN curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-amd64.tar.gz \
-    | tar -xz -C /usr/local/bin
+RUN apk add --no-cache ca-certificates
 WORKDIR /app
-COPY --from=backend-builder /go-chat .
+COPY --from=builder /go-chat .
+COPY --from=builder /usr/local/bin/migrate /usr/local/bin/migrate
 COPY db ./db
 EXPOSE 8080
 CMD ["./go-chat"]
-# CMD migrate -path ./db/migrations -database "$DATABASE_URL" up && ./go-chat
