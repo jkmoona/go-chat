@@ -9,6 +9,7 @@
                 <LoadingButton
                     @click="leaveRoom"
                     variant="destructive"
+                    :loading="loading"
                     loading-text="Leaving..."
                 >
                     <LogOut class="size-4" /> Leave
@@ -45,7 +46,6 @@ import { ref, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useRoomStore } from "@/stores/room";
-import { WS_URL } from "@/services/constants";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -89,7 +89,8 @@ async function connectSocket() {
         socket = null;
     }
 
-    const wsUrl = `${WS_URL}/ws/joinRoom/${roomId}?userId=${userId}&username=${username}`;
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws/joinRoom/${roomId}?userId=${userId}&username=${username}`;
     socket = new WebSocket(wsUrl);
 
     socket.onopen = () => console.log("WebSocket connected");

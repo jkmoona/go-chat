@@ -1,0 +1,16 @@
+:{$PORT} {
+	handle /api/* {
+		uri strip_prefix /api
+		reverse_proxy {$BACKEND_URL}
+	}
+
+	handle /ws/* {
+		reverse_proxy {$BACKEND_URL}
+	}
+
+	handle {
+		root * /srv/dist
+		try_files {path} /index.html
+		file_server
+	}
+}

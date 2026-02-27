@@ -1,6 +1,5 @@
 import { defineStore } from "pinia";
 import { apiFetch, refreshToken } from "../services/api";
-
 interface User {
     id: string;
     username: string;
@@ -14,7 +13,7 @@ export const useAuthStore = defineStore("auth", {
     actions: {
         async login(username: string, password: string) {
             try {
-                const res = await apiFetch("/login", {
+                const res = await apiFetch("login", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -22,6 +21,8 @@ export const useAuthStore = defineStore("auth", {
                         password: password.trim(),
                     }),
                 });
+                console.log(res);
+                
                 const data = await res.json();
                 if (res.ok) {
                     this.user = data;
@@ -42,7 +43,7 @@ export const useAuthStore = defineStore("auth", {
         },
         async register(username: string, password: string) {
             try {
-                const res = await apiFetch("/register", {
+                const res = await apiFetch("register", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -68,7 +69,7 @@ export const useAuthStore = defineStore("auth", {
             }
         },
         async logout() {
-            await apiFetch("/logout", {
+            await apiFetch("logout", {
                 method: "GET",
             });
             this.user = null;
