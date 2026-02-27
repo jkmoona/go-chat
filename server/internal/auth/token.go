@@ -60,6 +60,10 @@ func GenerateRefreshToken(userID int64, username string, duration time.Duration)
 	return signedToken, err
 }
 
+func SecureCookies() bool {
+	return os.Getenv("SECURE_COOKIES") != "false"
+}
+
 func ValidateAccessToken(tokenStr string) (*MyJWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &MyJWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(getAccessSecret()), nil
