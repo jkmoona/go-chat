@@ -1,11 +1,8 @@
-import { SERVER_URL } from "./constants";
-
 export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
     let res = await fetch(`api/${path}`, { ...options, credentials: "include" });
     if (res.status === 401) {
         const refreshed = await refreshToken();
         if (refreshed) {
-            console.log("why refresh??");
             res = await fetch(`api/${path}`, { ...options, credentials: "include" });
         }
     }
