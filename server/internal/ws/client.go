@@ -2,7 +2,7 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 
 	"github.com/gorilla/websocket"
 )
@@ -46,16 +46,21 @@ func (c *Client) readMessage(hub *Hub) {
 		_, m, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("error: %v", err)
+				slog.Error("websocket read error",
+					slog.String("client", c.Username),
+					slog.String("room", c.RoomID),
+					slog.String("error", err.Error()),
+				)
 			}
 			break
 		}
 
 		var msg Message
-
-		// TODO: DOUBLE CHECK THE MESSAGE STRUCTURE
 		if err := json.Unmarshal(m, &msg); err != nil {
-			log.Printf("invalid message: %v", err)
+			slog.Warn("invalid message",
+				slog.String("client", c.Username),
+				slog.String("error", err.Error()),
+			)
 			continue
 		}
 

@@ -2,7 +2,6 @@ package ws
 
 import (
 	"net/http"
-	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -10,11 +9,12 @@ import (
 )
 
 type Handler struct {
-	hub *Hub
+	hub       *Hub
+	clientURL string
 }
+
 type CreateRoomReq struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	Name string `json:"name" binding:"required,min=1,max=100"`
 }
 
 type RoomRes struct {
@@ -27,15 +27,10 @@ type ClientRes struct {
 	Username string `json:"username"`
 }
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin:     checkOrigin,
-}
-
-func NewHandler(h *Hub) *Handler {
+func NewHandler(h *Hub, clientURL string) *Handler {
 	return &Handler{
-		hub: h,
+		hub:       h,
+		clientURL: clientURL,
 	}
 }
 
@@ -52,11 +47,11 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 		return
 	}
 
-	h.hub.Rooms[roomID] = &Room{
+	h.hub.CreateRoom(&Room{
 		ID:      roomID,
 		Name:    req.Name,
 		Clients: make(map[string]*Client),
-	}
+	})
 
 	c.JSON(http.StatusOK, RoomRes{
 		ID:   roomID,
@@ -65,6 +60,14 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 }
 
 func (h *Handler) JoinRoom(c *gin.Context) {
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return r.Header.Get("Origin") == h.clientURL
+		},
+	}
+
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -97,9 +100,10 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 }
 
 func (h *Handler) GetRooms(c *gin.Context) {
-	rooms := make([]RoomRes, 0)
+	hubRooms := h.hub.GetRooms()
+	rooms := make([]RoomRes, 0, len(hubRooms))
 
-	for _, r := range h.hub.Rooms {
+	for _, r := range hubRooms {
 		rooms = append(rooms, RoomRes{
 			ID:   r.ID,
 			Name: r.Name,
@@ -110,28 +114,16 @@ func (h *Handler) GetRooms(c *gin.Context) {
 }
 
 func (h *Handler) GetClients(c *gin.Context) {
-	var clients []ClientRes
-	roomId := c.Param("roomId")
+	roomID := c.Param("roomId")
+	hubClients := h.hub.GetClients(roomID)
+	clients := make([]ClientRes, 0, len(hubClients))
 
-	if _, ok := h.hub.Rooms[roomId]; !ok {
-		clients = make([]ClientRes, 0)
-		c.JSON(http.StatusOK, clients)
-	}
-
-	for _, c := range h.hub.Rooms[roomId].Clients {
+	for _, cl := range hubClients {
 		clients = append(clients, ClientRes{
-			ID:       c.ID,
-			Username: c.Username,
+			ID:       cl.ID,
+			Username: cl.Username,
 		})
 	}
 
 	c.JSON(http.StatusOK, clients)
-}
-
-func checkOrigin(r *http.Request) bool {
-	clientURL := os.Getenv("CLIENT_URL")
-	if clientURL == "" {
-		clientURL = "http://localhost:5173"
-	}
-	return r.Header.Get("Origin") == clientURL
 }
