@@ -1,37 +1,60 @@
-# go-chat
+# TempChat
 
-A simple real-time chat app built with **Go (Gin + WebSockets)**, **Postgres**, and a **Vue client**.  
+[![CI](https://github.com/jkmoona/go-chat/actions/workflows/ci.yml/badge.svg)](https://github.com/jkmoona/go-chat/actions/workflows/ci.yml)
 
-## Features
+Disposable chat rooms that self-destruct. Pick a TTL, share the link, talk. When time's up, the room and everything in it is gone. Messages are never saved to disk.
 
-- JWT auth (register, login, refresh)
-- Rooms & private messaging via WebSockets
-- Dockerized backend with Postgres
-- Vue 3 + Tailwind frontend
-- **Live demo**: [tempchatgo.netlify.app](https://tempchatgo.netlify.app)
+[tempchatgo.up.railway.app](https://tempchatgo.up.railway.app)
 
-## Setup
+## What it does
 
-### Backend
+- Rooms automatically expire after a set time (15 minutes to 24 hours), and empty rooms are removed after 5 minutes of inactivity
+- Optionally, rooms can be locked with a 4-digit PIN (securely hashed with bcrypt)
+- Anyone with the link can join as a guest without signing up
+- Live typing indicators, who's-online list, and a countdown timer as the room approaches expiry
+- Auth uses JWT access + refresh tokens in HTTP-only cookies
+
+## How it's built
+
+```text
+  Vue 3 SPA ──── Caddy ──── Go (Gin + WebSocket) ──── PostgreSQL
+                         all on Railway
+```
+
+Room metadata (name, TTL, PIN hash) is in Postgres. Messages only exist in memory — they're broadcast over WebSocket and never touch the database.
+
+| | |
+| --- | --- |
+| Backend | Go 1.23, Gin, gorilla/websocket |
+| Database | PostgreSQL 15 |
+| Auth | JWT (access + refresh), bcrypt |
+| Frontend | Vue 3, TypeScript, Tailwind CSS |
+| Infra | Docker, Caddy, Railway |
+| CI | GitHub Actions |
+
+## Dev setup
 
 ```sh
+# backend
 cd server
 cp .env.example .env
 docker compose up --build
-```
 
-### Client
-
-```sh
+# frontend
 cd client
 cp .env.example .env
 npm install
 npm run dev
 ```
 
-## Cleanup
+## Tests
 
-To stop and remove all containers, networks, and volumes created by this project:
+```sh
+cd server
+go test -race ./...
+```
+
+## Teardown
 
 ```sh
 cd server
@@ -40,4 +63,4 @@ docker compose down -v
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+[MIT](LICENSE)
