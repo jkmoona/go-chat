@@ -10,11 +10,12 @@ import (
 	"github.com/jkmoona/go-chat/server/internal/auth"
 	"github.com/jkmoona/go-chat/server/internal/config"
 	"github.com/jkmoona/go-chat/server/internal/middleware"
+	"github.com/jkmoona/go-chat/server/internal/room"
 	"github.com/jkmoona/go-chat/server/internal/user"
 	"github.com/jkmoona/go-chat/server/internal/ws"
 )
 
-func NewRouter(cfg *config.Config, userHandler *user.Handler, wsHandler *ws.Handler) *gin.Engine {
+func NewRouter(cfg *config.Config, userHandler *user.Handler, roomHandler *room.Handler, wsHandler *ws.Handler) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(middleware.RequestLogger(slog.Default()))
@@ -28,7 +29,6 @@ func NewRouter(cfg *config.Config, userHandler *user.Handler, wsHandler *ws.Hand
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Rate limit auth endpoints: 5 requests/sec, burst of 10
 	authLimiter := middleware.NewRateLimiter(5, 10)
 
 	r.POST("/register", authLimiter.Middleware(), userHandler.CreateUser)
@@ -36,12 +36,15 @@ func NewRouter(cfg *config.Config, userHandler *user.Handler, wsHandler *ws.Hand
 	r.GET("/logout", userHandler.Logout)
 	r.POST("/refresh", userHandler.RefreshToken)
 
+	r.GET("/ws/room/:roomId", roomHandler.GetRoom)
+	r.POST("/ws/room/:roomId/verify", roomHandler.VerifyPIN)
+
 	wsGroup := r.Group("/ws")
 	wsGroup.Use(auth.AuthMiddleware())
 	{
-		wsGroup.POST("/createRoom", wsHandler.CreateRoom)
+		wsGroup.POST("/createRoom", roomHandler.CreateRoom)
+		wsGroup.GET("/getRooms", roomHandler.ListRooms)
 		wsGroup.GET("/joinRoom/:roomId", wsHandler.JoinRoom)
-		wsGroup.GET("/getRooms", wsHandler.GetRooms)
 		wsGroup.GET("/getClients/:roomId", wsHandler.GetClients)
 	}
 

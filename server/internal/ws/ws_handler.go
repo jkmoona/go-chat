@@ -5,21 +5,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
 type Handler struct {
 	hub       *Hub
 	clientURL string
-}
-
-type CreateRoomReq struct {
-	Name string `json:"name" binding:"required,min=1,max=100"`
-}
-
-type RoomRes struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	verifyPIN func(roomID, pin string) error
 }
 
 type ClientRes struct {
@@ -27,39 +18,31 @@ type ClientRes struct {
 	Username string `json:"username"`
 }
 
-func NewHandler(h *Hub, clientURL string) *Handler {
+func NewHandler(h *Hub, clientURL string, verifyPIN func(roomID, pin string) error) *Handler {
 	return &Handler{
 		hub:       h,
 		clientURL: clientURL,
+		verifyPIN: verifyPIN,
 	}
-}
-
-func (h *Handler) CreateRoom(c *gin.Context) {
-	var req CreateRoomReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	roomID, err := gonanoid.New(6)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate room id"})
-		return
-	}
-
-	h.hub.CreateRoom(&Room{
-		ID:      roomID,
-		Name:    req.Name,
-		Clients: make(map[string]*Client),
-	})
-
-	c.JSON(http.StatusOK, RoomRes{
-		ID:   roomID,
-		Name: req.Name,
-	})
 }
 
 func (h *Handler) JoinRoom(c *gin.Context) {
+	roomID := c.Param("roomId")
+
+	info := h.hub.GetRoomInfo(roomID)
+	if !info.Exists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+		return
+	}
+
+	if info.HasPIN {
+		pin := c.Query("pin")
+		if err := h.verifyPIN(roomID, pin); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "invalid pin"})
+			return
+		}
+	}
+
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -73,7 +56,7 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	roomID := c.Param("roomId")
+
 	clientID := c.Query("userId")
 	username := c.Query("username")
 
@@ -97,20 +80,6 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 
 	go cl.writeMessage()
 	cl.readMessage(h.hub)
-}
-
-func (h *Handler) GetRooms(c *gin.Context) {
-	hubRooms := h.hub.GetRooms()
-	rooms := make([]RoomRes, 0, len(hubRooms))
-
-	for _, r := range hubRooms {
-		rooms = append(rooms, RoomRes{
-			ID:   r.ID,
-			Name: r.Name,
-		})
-	}
-
-	c.JSON(http.StatusOK, rooms)
 }
 
 func (h *Handler) GetClients(c *gin.Context) {

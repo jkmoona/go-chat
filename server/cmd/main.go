@@ -12,6 +12,7 @@ import (
 	"github.com/jkmoona/go-chat/server/db"
 	"github.com/jkmoona/go-chat/server/internal/auth"
 	"github.com/jkmoona/go-chat/server/internal/config"
+	"github.com/jkmoona/go-chat/server/internal/room"
 	"github.com/jkmoona/go-chat/server/internal/user"
 	"github.com/jkmoona/go-chat/server/internal/ws"
 	"github.com/jkmoona/go-chat/server/router"
@@ -52,11 +53,29 @@ func main() {
 	userSvc := user.NewService(userRep)
 	userHandler := user.NewHandler(userSvc)
 
-	hub := ws.NewHub()
-	wsHandler := ws.NewHandler(hub, cfg.ClientURL)
+	roomRep := room.NewRepository(dbConn.GetDB())
+	roomSvc := room.NewService(roomRep)
+
+	hub := ws.NewHub(func(roomID string) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := roomSvc.Deactivate(ctx, roomID); err != nil {
+			slog.Error("failed to deactivate room", slog.String("room_id", roomID), slog.String("error", err.Error()))
+		}
+	})
+
+	loadActiveRooms(roomSvc, hub)
+
+	roomHandler := room.NewHandler(roomSvc, hub)
+
+	verifyPIN := func(roomID, pin string) error {
+		return roomSvc.VerifyPIN(context.Background(), roomID, pin)
+	}
+	wsHandler := ws.NewHandler(hub, cfg.ClientURL, verifyPIN)
+
 	go hub.Run()
 
-	r := router.NewRouter(cfg, userHandler, wsHandler)
+	r := router.NewRouter(cfg, userHandler, roomHandler, wsHandler)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
@@ -87,4 +106,26 @@ func main() {
 	hub.Close()
 	dbConn.Close()
 	slog.Info("server stopped")
+}
+
+func loadActiveRooms(roomSvc room.Service, hub *ws.Hub) {
+	rooms, err := roomSvc.ListActiveRooms(context.Background())
+	if err != nil {
+		slog.Error("failed to load active rooms", slog.String("error", err.Error()))
+		return
+	}
+
+	for _, r := range rooms {
+		hub.CreateRoom(&ws.Room{
+			ID:        r.ID,
+			Name:      r.Name,
+			Clients:   make(map[string]*ws.Client),
+			ExpiresAt: r.ExpiresAt,
+			HasPIN:    r.PinHash != "",
+		})
+	}
+
+	if len(rooms) > 0 {
+		slog.Info("loaded active rooms from database", slog.Int("count", len(rooms)))
+	}
 }
