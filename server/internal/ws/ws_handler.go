@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
 type Handler struct {
@@ -73,6 +74,72 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 		RoomID:   roomID,
 		Username: username,
 		Type:     "system",
+	}
+
+	h.hub.Register <- cl
+	h.hub.Broadcast <- m
+
+	go cl.writeMessage()
+	cl.readMessage(h.hub)
+}
+
+func (h *Handler) GuestJoinRoom(c *gin.Context) {
+	roomID := c.Param("roomId")
+	name := c.Query("name")
+
+	if len(name) == 0 || len(name) > 30 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name must be between 1 and 30 characters"})
+		return
+	}
+
+	info := h.hub.GetRoomInfo(roomID)
+	if !info.Exists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+		return
+	}
+
+	if info.HasPIN {
+		pin := c.Query("pin")
+		if err := h.verifyPIN(roomID, pin); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "invalid pin"})
+			return
+		}
+	}
+
+	guestID, err := gonanoid.New(8)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate guest id"})
+		return
+	}
+
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return r.Header.Get("Origin") == h.clientURL
+		},
+	}
+
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	cl := &Client{
+		Conn:     conn,
+		Message:  make(chan *Message, 10),
+		ID:       "guest_" + guestID,
+		RoomID:   roomID,
+		Username: name,
+		IsGuest:  true,
+	}
+
+	m := &Message{
+		Content:  name + " has joined the room",
+		RoomID:   roomID,
+		Username: name,
+		Type:     MessageTypeSystem,
 	}
 
 	h.hub.Register <- cl

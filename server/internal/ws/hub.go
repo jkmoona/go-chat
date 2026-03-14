@@ -99,6 +99,27 @@ func (h *Hub) Close() {
 	close(h.done)
 }
 
+func (h *Hub) broadcastPresence(room *Room) {
+	clients := make([]ClientInfo, 0, len(room.Clients))
+	for _, cl := range room.Clients {
+		clients = append(clients, ClientInfo{
+			ID:       cl.ID,
+			Username: cl.Username,
+			IsGuest:  cl.IsGuest,
+		})
+	}
+
+	msg := &Message{
+		Type:    MessageTypePresence,
+		RoomID:  room.ID,
+		Clients: clients,
+	}
+
+	for _, cl := range room.Clients {
+		cl.Message <- msg
+	}
+}
+
 func (h *Hub) doExpireRoom(roomID string) {
 	room, ok := h.rooms[roomID]
 	if !ok {
@@ -150,6 +171,19 @@ func (h *Hub) Run() {
 			for id, room := range h.rooms {
 				if now.After(room.ExpiresAt) {
 					h.doExpireRoom(id)
+					continue
+				}
+
+				remaining := int(time.Until(room.ExpiresAt).Seconds())
+				if remaining <= 300 && len(room.Clients) > 0 {
+					msg := &Message{
+						Type:      MessageTypeCountdown,
+						RoomID:    room.ID,
+						Remaining: remaining,
+					}
+					for _, cl := range room.Clients {
+						cl.Message <- msg
+					}
 				}
 			}
 
@@ -203,6 +237,7 @@ func (h *Hub) Run() {
 					t.Stop()
 					delete(h.idleTimers, cl.RoomID)
 				}
+				h.broadcastPresence(room)
 			}
 
 		case cl := <-h.Unregister:
@@ -218,6 +253,7 @@ func (h *Hub) Run() {
 					}
 					delete(room.Clients, cl.ID)
 					close(cl.Message)
+					h.broadcastPresence(room)
 
 					if len(room.Clients) == 0 {
 						roomID := cl.RoomID

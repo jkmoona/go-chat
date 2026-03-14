@@ -7,19 +7,36 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	MessageTypeChat      = "chat"
+	MessageTypeSystem    = "system"
+	MessageTypeTyping    = "typing"
+	MessageTypePresence  = "presence"
+	MessageTypeCountdown = "countdown"
+)
+
 type Client struct {
 	Conn     *websocket.Conn
 	Message  chan *Message
 	ID       string `json:"id"`
 	RoomID   string `json:"roomId"`
 	Username string `json:"username"`
+	IsGuest  bool   `json:"is_guest"`
+}
+
+type ClientInfo struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	IsGuest  bool   `json:"is_guest"`
 }
 
 type Message struct {
-	Content  string `json:"content"`
-	RoomID   string `json:"roomId"`
-	Username string `json:"username"`
-	Type     string `json:"type"`
+	Content   string       `json:"content"`
+	RoomID    string       `json:"roomId"`
+	Username  string       `json:"username"`
+	Type      string       `json:"type"`
+	Clients   []ClientInfo `json:"clients,omitempty"`
+	Remaining int          `json:"remaining,omitempty"`
 }
 
 func (c *Client) writeMessage() {

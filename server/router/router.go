@@ -38,6 +38,7 @@ func NewRouter(cfg *config.Config, userHandler *user.Handler, roomHandler *room.
 
 	r.GET("/ws/room/:roomId", roomHandler.GetRoom)
 	r.POST("/ws/room/:roomId/verify", roomHandler.VerifyPIN)
+	r.GET("/ws/guest/joinRoom/:roomId", authLimiter.Middleware(), wsHandler.GuestJoinRoom)
 
 	wsGroup := r.Group("/ws")
 	wsGroup.Use(auth.AuthMiddleware())
