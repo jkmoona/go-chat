@@ -1,16 +1,55 @@
 <template>
-    <div class="flex flex-col h-dvh bg-background text-foreground dark">
-        <div class="flex flex-col h-full w-full max-w-2xl mx-auto p-4">
+    <div class="bg-background text-foreground h-dvh flex items-center justify-center dark">
+
+        <!-- Join form -->
+        <div v-if="!connected" class="w-full max-w-sm px-6">
+            <div v-if="roomError" class="text-center space-y-2">
+                <p class="text-lg font-semibold">Room not found</p>
+                <p class="text-sm text-muted-foreground">This room may have expired or never existed.</p>
+            </div>
+
+            <template v-else-if="room">
+                <div class="mb-6 text-center">
+                    <h1 class="text-2xl font-bold">{{ room.name }}</h1>
+                    <p class="text-sm text-muted-foreground mt-1">{{ formatExpiry(room.expires_at) }}</p>
+                </div>
+
+                <form @submit.prevent="joinRoom" class="space-y-3">
+                    <Input
+                        v-model="guestName"
+                        placeholder="Your name"
+                        maxlength="30"
+                        required
+                        autofocus
+                    />
+                    <Input
+                        v-if="room.has_pin"
+                        v-model="pin"
+                        type="text"
+                        inputmode="numeric"
+                        maxlength="4"
+                        placeholder="Room PIN"
+                    />
+                    <p v-if="joinError" class="text-sm text-destructive">{{ joinError }}</p>
+                    <LoadingButton type="submit" class="w-full" :loading="joining" loading-text="Joining...">
+                        Join Room
+                    </LoadingButton>
+                </form>
+            </template>
+
+            <div v-else class="text-center text-muted-foreground text-sm">Loading...</div>
+        </div>
+
+        <!-- Chat -->
+        <div v-else class="flex flex-col h-full w-full max-w-2xl p-4">
 
             <!-- Header -->
             <div class="flex justify-between items-center mb-4 shrink-0">
-                <h1 class="text-xl font-bold truncate">
-                    {{ roomStore.currentRoom.name }}
-                </h1>
-                <div class="flex items-center gap-2 ml-2 shrink-0">
-                    <Button variant="ghost" size="sm" @click="copyLink">
-                        <Link2 class="size-4" />
-                    </Button>
+                <div>
+                    <h1 class="text-xl font-bold">{{ room?.name }}</h1>
+                    <p class="text-xs text-muted-foreground">Guest: {{ guestName }}</p>
+                </div>
+                <div class="flex items-center gap-2">
                     <Button
                         variant="ghost"
                         size="sm"
@@ -20,14 +59,9 @@
                         <Users class="size-4" />
                         <span class="ml-1 text-xs">{{ onlineUsers.length }}</span>
                     </Button>
-                    <LoadingButton
-                        @click="leaveRoom"
-                        variant="destructive"
-                        :loading="loading"
-                        loading-text="Leaving..."
-                    >
+                    <Button variant="destructive" size="sm" @click="leaveRoom">
                         <LogOut class="size-4" /> Leave
-                    </LoadingButton>
+                    </Button>
                 </div>
             </div>
 
@@ -51,7 +85,7 @@
                     v-for="(msg, index) in messages"
                     :key="index"
                     :message="msg"
-                    :current-user="username"
+                    :current-user="guestName"
                 />
                 <div ref="bottomEl"></div>
             </Card>
@@ -80,23 +114,29 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { useAuthStore } from "@/stores/auth";
-import { useRoomStore } from "@/stores/room";
+import { useRoute } from "vue-router";
 import { toast } from "vue-sonner";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { LogOut, Link2, Users } from "lucide-vue-next";
-
+import { LogOut, Users } from "lucide-vue-next";
 import LoadingButton from "@/components/LoadingButton.vue";
 import ChatMessageCard from "@/components/ChatMessageCard.vue";
+
+interface RoomInfo {
+    id: string;
+    name: string;
+    ttl: number;
+    expires_at: string;
+    has_pin: boolean;
+    clients: number;
+}
 
 interface ChatMessage {
     type: string;
     username?: string;
     content: string;
-    roomId?: string;
 }
 
 interface ClientInfo {
@@ -115,15 +155,16 @@ interface WsMessage {
 }
 
 const route = useRoute();
-const router = useRouter();
-const roomStore = useRoomStore();
-const auth = useAuthStore();
-const loading = ref(false);
-const showUsers = ref(false);
-
 const roomId = route.params.roomId as string;
-const username = auth.user?.username ?? "guest";
-const userId = auth.user?.id ?? "guest";
+
+const room = ref<RoomInfo | null>(null);
+const roomError = ref(false);
+const guestName = ref("");
+const pin = ref("");
+const joinError = ref("");
+const joining = ref(false);
+const connected = ref(false);
+const showUsers = ref(false);
 
 const newMessage = ref("");
 const messages = ref<ChatMessage[]>([]);
@@ -140,31 +181,68 @@ const formattedRemaining = computed(() => {
     return `${m}:${s.toString().padStart(2, "0")}`;
 });
 
+function formatExpiry(expiresAt: string): string {
+    const diff = new Date(expiresAt).getTime() - Date.now();
+    if (diff <= 0) return "expired";
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    if (h > 0) return `Expires in ${h}h ${m}m`;
+    return `Expires in ${m}m`;
+}
+
 function scrollToBottom() {
     bottomEl.value?.scrollIntoView({ behavior: "smooth" });
 }
 
-async function connectSocket() {
-    await auth.tryRefresh();
+async function fetchRoom() {
+    try {
+        const res = await fetch(`/api/ws/room/${roomId}`);
+        if (!res.ok) {
+            roomError.value = true;
+            return;
+        }
+        room.value = await res.json();
+    } catch {
+        roomError.value = true;
+    }
+}
 
-    if (socket) {
-        socket.close();
-        socket = null;
+async function joinRoom() {
+    if (!guestName.value.trim()) return;
+    if (room.value?.has_pin && !pin.value) {
+        joinError.value = "PIN is required";
+        return;
     }
 
-    const pin = window.history.state?.pin as string | undefined;
+    joining.value = true;
+    joinError.value = "";
+
+    const name = guestName.value.trim();
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    let wsUrl = `${protocol}//${window.location.host}/ws/joinRoom/${roomId}?userId=${userId}&username=${username}`;
-    if (pin) wsUrl += `&pin=${encodeURIComponent(pin)}`;
+    let wsUrl = `${protocol}//${window.location.host}/ws/guest/joinRoom/${roomId}?name=${encodeURIComponent(name)}`;
+    if (pin.value) wsUrl += `&pin=${encodeURIComponent(pin.value)}`;
 
     socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
-        // clear pin from history state after connect so it won't be reused on page refresh
-        if (pin) {
-            const { pin: _pin, ...rest } = window.history.state ?? {};
-            void _pin;
-            history.replaceState(rest, "");
+        joining.value = false;
+        connected.value = true;
+        nextTick(() => inputEl.value?.focus());
+    };
+
+    socket.onerror = () => {
+        joining.value = false;
+        joinError.value = "Failed to connect. Check your PIN and try again.";
+        socket = null;
+    };
+
+    socket.onclose = (event) => {
+        if (!connected.value) {
+            joining.value = false;
+            joinError.value = event.code === 1008
+                ? "Invalid PIN or room not found."
+                : "Connection refused.";
+            socket = null;
         }
     };
 
@@ -186,8 +264,14 @@ async function connectSocket() {
             case "system":
                 messages.value.push({ type: "system", content: msg.content ?? "" });
                 if (msg.content === "room has expired") {
-                    toast.error("Room expired", { description: "You'll be redirected shortly." });
-                    redirectTimer = setTimeout(() => router.push("/"), 2000);
+                    toast.error("Room expired");
+                    redirectTimer = setTimeout(() => {
+                        connected.value = false;
+                        messages.value = [];
+                        onlineUsers.value = [];
+                        remaining.value = 0;
+                        socket = null;
+                    }, 2000);
                 }
                 await nextTick();
                 scrollToBottom();
@@ -197,48 +281,24 @@ async function connectSocket() {
                     type: msg.type,
                     username: msg.username,
                     content: msg.content ?? "",
-                    roomId: msg.roomId,
                 });
                 if (messages.value.length > 500) messages.value.shift();
                 await nextTick();
                 scrollToBottom();
         }
     };
-
-    socket.onerror = () => toast.error("Connection error");
-    socket.onclose = () => console.log("WebSocket closed");
 }
 
 async function send() {
-    if (!newMessage.value.trim()) return;
+    if (!newMessage.value.trim() || !socket || socket.readyState !== WebSocket.OPEN) return;
 
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-        messages.value.push({ type: "system", content: "Connection lost. Reconnecting..." });
-        connectSocket();
-        return;
-    }
-
-    const msg = {
+    socket.send(JSON.stringify({
         type: "chat",
-        username,
+        username: guestName.value,
         content: newMessage.value,
         roomId,
-    };
-
-    try {
-        socket.send(JSON.stringify(msg));
-        messages.value.push({ ...msg });
-        await nextTick();
-        scrollToBottom();
-        newMessage.value = "";
-    } catch {
-        messages.value.push({ type: "system", content: "Failed to send message." });
-    }
-}
-
-async function copyLink() {
-    await navigator.clipboard.writeText(`${window.location.origin}/join/${roomId}`);
-    toast.success("Link copied");
+    }));
+    newMessage.value = "";
 }
 
 function leaveRoom() {
@@ -246,17 +306,13 @@ function leaveRoom() {
         socket.close();
         socket = null;
     }
-    loading.value = true;
-    setTimeout(() => {
-        router.push("/");
-        loading.value = false;
-    }, 1000);
+    connected.value = false;
+    messages.value = [];
+    onlineUsers.value = [];
+    remaining.value = 0;
 }
 
-onMounted(() => {
-    connectSocket();
-    inputEl.value?.focus();
-});
+onMounted(fetchRoom);
 
 onBeforeUnmount(() => {
     if (socket) {

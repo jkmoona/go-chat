@@ -4,6 +4,7 @@ import HomeView from "@/views/HomeView.vue";
 import RoomView from "@/views/RoomView.vue";
 import LoginView from "@/views/LoginView.vue";
 import RegisterView from "@/views/RegisterView.vue";
+import GuestJoinView from "@/views/GuestJoinView.vue";
 import { useAuthStore } from "@/stores/auth";
 
 const routes: RouteRecordRaw[] = [
@@ -11,6 +12,7 @@ const routes: RouteRecordRaw[] = [
     { path: "/room/:roomId", name: "Room", component: RoomView },
     { path: "/login", name: "Login", component: LoginView },
     { path: "/register", name: "Register", component: RegisterView },
+    { path: "/join/:roomId", name: "GuestJoin", component: GuestJoinView },
 ];
 
 const router = createRouter({
@@ -18,10 +20,10 @@ const router = createRouter({
     routes,
 });
 
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
     const auth = useAuthStore();
     const publicPages = ["/login", "/register"];
-    const authRequired = !publicPages.includes(to.path);
+    const authRequired = !publicPages.includes(to.path) && to.name !== "GuestJoin";
 
     if (authRequired && !auth.isAuthenticated) {
         const refreshed = await auth.tryRefresh();

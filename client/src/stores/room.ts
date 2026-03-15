@@ -3,6 +3,10 @@ import { defineStore } from "pinia";
 interface Room {
     id: string;
     name: string;
+    ttl: number;
+    expires_at: string;
+    has_pin: boolean;
+    clients: number;
 }
 
 export const useRoomStore = defineStore("room", {
