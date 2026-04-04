@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { apiFetch, refreshToken } from "../services/api";
+import { parseApiError } from "../utils/parseError";
 interface User {
     id: string;
     username: string;
@@ -18,27 +19,25 @@ export const useAuthStore = defineStore("auth", {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         username: username.trim(),
-                        password: password.trim(),
+                        password,
                     }),
                 });
-                console.log(res);
-                
-                const data = await res.json();
-                if (res.ok) {
-                    this.user = data;
-                    this.isAuthenticated = true;
-                    localStorage.setItem('user', JSON.stringify(data));
-                } else {
-                    throw new Error(data.error || "Login failed.");
+
+                if (!res.ok) {
+                    throw new Error(await parseApiError(res, "Login failed"));
                 }
+
+                const data = await res.json();
+                this.user = data;
+                this.isAuthenticated = true;
+                localStorage.setItem('user', JSON.stringify(data));
             } catch (err: unknown) {
                 this.user = null;
                 this.isAuthenticated = false;
-                if (err instanceof Error) {
-                    throw new Error(err.message || "Network error. Please try again.");
-                } else {
-                    throw new Error("Network error. Please try again.");
+                if (err instanceof TypeError) {
+                    throw new Error("Network error. Please check your connection.");
                 }
+                throw err instanceof Error ? err : new Error("An unexpected error occurred.");
             }
         },
         async register(username: string, password: string) {
@@ -48,30 +47,31 @@ export const useAuthStore = defineStore("auth", {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         username: username.trim(),
-                        password: password.trim(),
+                        password,
                     }),
                 });
-                const data = await res.json();
-                if (res.ok && data.id && data.username) {
-                    this.user = null;
-                    this.isAuthenticated = false;
-                } else {
-                    throw new Error(data.error || "Registration failed.");
+
+                if (!res.ok) {
+                    throw new Error(await parseApiError(res, "Registration failed"));
                 }
-            } catch (err: unknown){
+
                 this.user = null;
                 this.isAuthenticated = false;
-                if (err instanceof Error) {
-                    throw new Error(err.message || "Network error. Please try again.");
-                } else {
-                    throw new Error("Network error. Please try again.");
+            } catch (err: unknown) {
+                this.user = null;
+                this.isAuthenticated = false;
+                if (err instanceof TypeError) {
+                    throw new Error("Network error. Please check your connection.");
                 }
+                throw err instanceof Error ? err : new Error("An unexpected error occurred.");
             }
         },
         async logout() {
-            await apiFetch("logout", {
-                method: "GET",
-            });
+            try {
+                await apiFetch("logout", { method: "GET" });
+            } catch {
+                // still clear local state even if server logout fails
+            }
             this.user = null;
             this.isAuthenticated = false;
             localStorage.removeItem('user');
@@ -82,8 +82,6 @@ export const useAuthStore = defineStore("auth", {
                 this.isAuthenticated = true;
                 return true;
             }
-            this.isAuthenticated = false;
-            this.user = null;
             return false;
         },
     },

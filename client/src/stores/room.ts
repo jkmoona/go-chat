@@ -1,12 +1,13 @@
 import { defineStore } from "pinia";
 
-interface Room {
+export interface Room {
     id: string;
     name: string;
     ttl: number;
     expires_at: string;
     has_pin: boolean;
     clients: number;
+    is_creator: boolean;
 }
 
 export const useRoomStore = defineStore("room", {

@@ -1,271 +1,220 @@
 <template>
     <div class="flex flex-col h-dvh bg-background text-foreground dark">
-        <div class="flex flex-col h-full w-full max-w-2xl mx-auto p-4">
-
-            <!-- Header -->
-            <div class="flex justify-between items-center mb-4 shrink-0">
-                <h1 class="text-xl font-bold truncate">
-                    {{ roomStore.currentRoom.name }}
-                </h1>
-                <div class="flex items-center gap-2 ml-2 shrink-0">
-                    <Button variant="ghost" size="sm" @click="copyLink">
-                        <Link2 class="size-4" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        @click="showUsers = !showUsers"
-                        :class="{ 'text-primary': showUsers }"
-                    >
-                        <Users class="size-4" />
-                        <span class="ml-1 text-xs">{{ onlineUsers.length }}</span>
-                    </Button>
-                    <LoadingButton
-                        @click="leaveRoom"
-                        variant="destructive"
-                        :loading="loading"
-                        loading-text="Leaving..."
-                    >
-                        <LogOut class="size-4" /> Leave
-                    </LoadingButton>
-                </div>
-            </div>
-
-            <!-- Online users panel -->
-            <div v-if="showUsers && onlineUsers.length > 0" class="mb-3 shrink-0 rounded-md border border-border p-2">
-                <p class="text-xs text-muted-foreground mb-1">Online</p>
-                <div class="flex flex-wrap gap-1">
-                    <span
-                        v-for="u in onlineUsers"
-                        :key="u.id"
-                        class="text-xs bg-muted rounded px-2 py-0.5"
-                    >
-                        {{ u.username }}<span v-if="u.is_guest" class="text-muted-foreground"> (guest)</span>
-                    </span>
-                </div>
-            </div>
-
-            <!-- Messages -->
-            <Card class="flex-1 gap-1 overflow-y-auto p-3 mb-4 space-y-2 bg-[oklch(0.22_0.006_286)] rounded-lg">
-                <ChatMessageCard
-                    v-for="(msg, index) in messages"
-                    :key="index"
-                    :message="msg"
-                    :current-user="username"
-                />
-                <div ref="bottomEl"></div>
-            </Card>
-
-            <!-- Countdown banner -->
-            <div
-                v-if="remaining > 0"
-                class="mb-2 shrink-0 text-center text-sm rounded-md border border-border py-1.5 px-3"
-                :class="remaining < 60 ? 'text-destructive border-destructive/50' : 'text-muted-foreground'"
+        <div class="flex flex-col h-full w-full max-w-2xl mx-auto px-3 py-3 sm:px-4 sm:py-4">
+            <ChatRoom
+                :room-name="roomStore.currentRoom.name ?? 'Room'"
+                :messages="chat.messages.value"
+                :online-users="chat.onlineUsers.value"
+                :remaining="chat.remaining.value"
+                :connection-status="chat.status.value"
+                :formatted-remaining="chat.formattedRemaining.value"
+                :username="username"
+                :is-creator="isCreator"
+                :current-user-id="auth.user?.id"
+                :send-fn="chat.send"
+                :retry-fn="chat.retry"
+                @kick="kickUser"
             >
-                Room expires in {{ formattedRemaining }}
-            </div>
-
-            <form @submit.prevent="send" class="flex gap-2 shrink-0">
-                <input
-                    v-model="newMessage"
-                    ref="inputEl"
-                    placeholder="Type a message..."
-                    class="flex-1 rounded border px-3 py-2 focus:outline-none"
-                />
-                <Button :disabled="!newMessage.trim()">Send</Button>
-            </form>
+                <template #header-actions>
+                    <button
+                        @click="copyLink"
+                        class="px-2 py-1 text-xs font-bold border-2 border-border neo-btn hover:border-primary/80"
+                        aria-label="Copy room link"
+                    >
+                        <Link2 class="size-3" />
+                    </button>
+                </template>
+                <template #header-end>
+                    <button
+                        @click="leaveRoom"
+                        class="px-2 py-1 text-xs font-bold border-2 border-destructive text-destructive neo-btn hover:bg-destructive hover:text-white"
+                    >Leave</button>
+                </template>
+                <template v-if="isCreator" #management>
+                    <div class="flex items-center gap-1.5 mb-3 shrink-0 flex-wrap border-b-2 border-border pb-3">
+                        <span class="text-xs font-mono text-muted-foreground mr-1">extend:</span>
+                        <button
+                            v-for="opt in ttlOptions"
+                            :key="opt.value"
+                            @click="extendTTL = extendTTL === opt.value ? '' : opt.value"
+                            :class="[
+                                'px-2.5 py-1 text-xs font-bold border-2 neo-btn',
+                                extendTTL === opt.value
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : 'border-border hover:border-primary/80',
+                            ]"
+                        >{{ opt.label }}</button>
+                        <button
+                            :disabled="!extendTTL"
+                            @click="extendRoom"
+                            class="px-2.5 py-1 text-xs font-bold border-2 border-border neo-btn hover:bg-primary hover:text-primary-foreground hover:border-primary disabled:opacity-30 disabled:cursor-not-allowed"
+                        >Extend</button>
+                        <button
+                            @click="handleDeleteClick"
+                            :class="[
+                                'ml-auto px-2.5 py-1 text-xs font-bold border-2 neo-btn',
+                                deleteConfirming
+                                    ? 'border-destructive text-destructive bg-destructive/10 animate-pulse'
+                                    : 'border-border hover:border-destructive hover:text-destructive',
+                            ]"
+                        >{{ deleteConfirming ? "Sure?" : "Delete Room" }}</button>
+                    </div>
+                </template>
+            </ChatRoom>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from "vue";
+import { ref, watch, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useRoomStore } from "@/stores/room";
+import { apiFetch } from "@/services/api";
+import { parseApiError } from "@/utils/parseError";
+import { useChatRoom } from "@/composables/useChatRoom";
 import { toast } from "vue-sonner";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { LogOut, Link2, Users } from "lucide-vue-next";
-
-import LoadingButton from "@/components/LoadingButton.vue";
-import ChatMessageCard from "@/components/ChatMessageCard.vue";
-
-interface ChatMessage {
-    type: string;
-    username?: string;
-    content: string;
-    roomId?: string;
-}
-
-interface ClientInfo {
-    id: string;
-    username: string;
-    is_guest: boolean;
-}
-
-interface WsMessage {
-    type: string;
-    content?: string;
-    username?: string;
-    roomId?: string;
-    clients?: ClientInfo[];
-    remaining?: number;
-}
+import { Link2 } from "lucide-vue-next";
+import ChatRoom from "@/components/ChatRoom.vue";
 
 const route = useRoute();
 const router = useRouter();
 const roomStore = useRoomStore();
 const auth = useAuthStore();
-const loading = ref(false);
-const showUsers = ref(false);
 
 const roomId = route.params.roomId as string;
-const username = auth.user?.username ?? "guest";
-const userId = auth.user?.id ?? "guest";
+const username = auth.user?.username ?? "user";
+const isCreator = ref(false);
+const extendTTL = ref("");
+const deleteConfirming = ref(false);
+let deleteTimer: ReturnType<typeof setTimeout> | null = null;
 
-const newMessage = ref("");
-const messages = ref<ChatMessage[]>([]);
-const onlineUsers = ref<ClientInfo[]>([]);
-const remaining = ref(0);
-const bottomEl = ref<HTMLElement | null>(null);
-const inputEl = ref<HTMLInputElement | null>(null);
-let socket: WebSocket | null = null;
-let redirectTimer: ReturnType<typeof setTimeout> | null = null;
+const ttlOptions = [
+    { value: "15", label: "+15m" },
+    { value: "30", label: "+30m" },
+    { value: "60", label: "+1h" },
+    { value: "360", label: "+6h" },
+];
 
-const formattedRemaining = computed(() => {
-    const m = Math.floor(remaining.value / 60);
-    const s = remaining.value % 60;
-    return `${m}:${s.toString().padStart(2, "0")}`;
-});
+const chat = useChatRoom(roomId, () => username);
 
-function scrollToBottom() {
-    bottomEl.value?.scrollIntoView({ behavior: "smooth" });
-}
+watch(
+    () => chat.status.value,
+    (s) => {
+        if (s === "kicked") {
+            toast.error("You have been removed from the room");
+            setTimeout(() => router.push("/"), 1500);
+        }
+        if (s === "expired") {
+            toast.error("Room expired", { description: "Redirecting..." });
+            setTimeout(() => router.push("/"), 2000);
+        }
+    },
+);
 
-async function connectSocket() {
-    await auth.tryRefresh();
-
-    if (socket) {
-        socket.close();
-        socket = null;
-    }
-
+function buildWsUrl(): string {
     const pin = window.history.state?.pin as string | undefined;
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    let wsUrl = `${protocol}//${window.location.host}/ws/joinRoom/${roomId}?userId=${userId}&username=${username}`;
-    if (pin) wsUrl += `&pin=${encodeURIComponent(pin)}`;
-
-    socket = new WebSocket(wsUrl);
-
-    socket.onopen = () => {
-        // clear pin from history state after connect so it won't be reused on page refresh
-        if (pin) {
-            const { pin: _pin, ...rest } = window.history.state ?? {};
-            void _pin;
-            history.replaceState(rest, "");
-        }
-    };
-
-    socket.onmessage = async (event: MessageEvent) => {
-        let msg: WsMessage;
-        try {
-            msg = JSON.parse(event.data as string);
-        } catch {
-            msg = { type: "system", content: event.data as string };
-        }
-
-        switch (msg.type) {
-            case "presence":
-                onlineUsers.value = msg.clients ?? [];
-                break;
-            case "countdown":
-                remaining.value = msg.remaining ?? 0;
-                break;
-            case "system":
-                messages.value.push({ type: "system", content: msg.content ?? "" });
-                if (msg.content === "room has expired") {
-                    toast.error("Room expired", { description: "You'll be redirected shortly." });
-                    redirectTimer = setTimeout(() => router.push("/"), 2000);
-                }
-                await nextTick();
-                scrollToBottom();
-                break;
-            default:
-                messages.value.push({
-                    type: msg.type,
-                    username: msg.username,
-                    content: msg.content ?? "",
-                    roomId: msg.roomId,
-                });
-                if (messages.value.length > 500) messages.value.shift();
-                await nextTick();
-                scrollToBottom();
-        }
-    };
-
-    socket.onerror = () => toast.error("Connection error");
-    socket.onclose = () => console.log("WebSocket closed");
-}
-
-async function send() {
-    if (!newMessage.value.trim()) return;
-
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-        messages.value.push({ type: "system", content: "Connection lost. Reconnecting..." });
-        connectSocket();
-        return;
-    }
-
-    const msg = {
-        type: "chat",
-        username,
-        content: newMessage.value,
-        roomId,
-    };
-
-    try {
-        socket.send(JSON.stringify(msg));
-        messages.value.push({ ...msg });
-        await nextTick();
-        scrollToBottom();
-        newMessage.value = "";
-    } catch {
-        messages.value.push({ type: "system", content: "Failed to send message." });
-    }
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    let url = `${proto}//${window.location.host}/ws/joinRoom/${roomId}`;
+    if (pin) url += `?pin=${encodeURIComponent(pin)}`;
+    return url;
 }
 
 async function copyLink() {
-    await navigator.clipboard.writeText(`${window.location.origin}/join/${roomId}`);
-    toast.success("Link copied");
+    try {
+        await navigator.clipboard.writeText(`${window.location.origin}/join/${roomId}`);
+        toast.success("Link copied");
+    } catch {
+        toast.error("Failed to copy link");
+    }
 }
 
 function leaveRoom() {
-    if (socket) {
-        socket.close();
-        socket = null;
-    }
-    loading.value = true;
-    setTimeout(() => {
-        router.push("/");
-        loading.value = false;
-    }, 1000);
+    chat.disconnect();
+    router.push("/");
 }
 
-onMounted(() => {
-    connectSocket();
-    inputEl.value?.focus();
+function handleDeleteClick() {
+    if (!deleteConfirming.value) {
+        deleteConfirming.value = true;
+        deleteTimer = setTimeout(() => {
+            deleteConfirming.value = false;
+        }, 3000);
+    } else {
+        if (deleteTimer) clearTimeout(deleteTimer);
+        deleteRoom();
+    }
+}
+
+async function extendRoom() {
+    const ttl = Number(extendTTL.value);
+    if (!ttl) return;
+
+    try {
+        const res = await apiFetch(`/ws/room/${roomId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ttl }),
+        });
+        if (!res.ok) throw new Error(await parseApiError(res, "Failed to extend room"));
+        toast.success("Room extended");
+        extendTTL.value = "";
+    } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Failed to extend room");
+    }
+}
+
+async function deleteRoom() {
+    try {
+        const res = await apiFetch(`/ws/room/${roomId}`, { method: "DELETE" });
+        if (!res.ok) throw new Error(await parseApiError(res, "Failed to delete room"));
+        chat.disconnect();
+        toast.success("Room deleted");
+        router.push("/");
+    } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Failed to delete room");
+        deleteConfirming.value = false;
+    }
+}
+
+async function kickUser(clientId: string) {
+    try {
+        const res = await apiFetch(`/ws/room/${roomId}/kick`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ client_id: clientId }),
+        });
+        if (!res.ok) throw new Error(await parseApiError(res, "Failed to kick user"));
+    } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Failed to kick user");
+    }
+}
+
+onMounted(async () => {
+    try {
+        const res = await apiFetch(`/ws/room/${roomId}`);
+        if (res.ok) {
+            const data = await res.json();
+            roomStore.setRoom(data.id, data.name);
+            isCreator.value = data.is_creator ?? false;
+        }
+    } catch {
+        // room info fetch failed, proceed with chat
+    }
+
+    const url = buildWsUrl();
+    chat.connect(url);
+
+    // clear PIN from history after capturing it in the URL
+    if (window.history.state?.pin) {
+        const { pin: _, ...rest } = window.history.state;
+        void _;
+        history.replaceState(rest, "");
+    }
 });
 
 onBeforeUnmount(() => {
-    if (socket) {
-        socket.close();
-        socket = null;
-    }
-    if (redirectTimer) {
-        clearTimeout(redirectTimer);
-        redirectTimer = null;
-    }
+    if (deleteTimer) clearTimeout(deleteTimer);
 });
 </script>
