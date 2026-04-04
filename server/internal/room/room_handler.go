@@ -201,6 +201,10 @@ func (h *Handler) ExtendRoom(c *gin.Context) {
 
 	updated, err := h.svc.ExtendTTL(c.Request.Context(), room.ID, req.TTL)
 	if err != nil {
+		if errors.Is(err, ErrMaxLifetimeReached) {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to extend room"})
 		return
 	}

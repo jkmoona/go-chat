@@ -92,6 +92,8 @@ func (s *service) Deactivate(c context.Context, id string) error {
 	return s.Repository.Deactivate(ctx, id)
 }
 
+const maxRoomLifetime = 24 * time.Hour
+
 func (s *service) ExtendTTL(c context.Context, roomID string, addMinutes int) (*Room, error) {
 	ctx, cancel := context.WithTimeout(c, s.timeout)
 	defer cancel()
@@ -101,7 +103,17 @@ func (s *service) ExtendTTL(c context.Context, roomID string, addMinutes int) (*
 		return nil, err
 	}
 
-	room.ExpiresAt = room.ExpiresAt.Add(time.Duration(addMinutes) * time.Minute)
+	cap := room.CreatedAt.Add(maxRoomLifetime)
+	if !room.ExpiresAt.Before(cap) {
+		return nil, ErrMaxLifetimeReached
+	}
+
+	newExpiresAt := room.ExpiresAt.Add(time.Duration(addMinutes) * time.Minute)
+	if newExpiresAt.After(cap) {
+		newExpiresAt = cap
+	}
+
+	room.ExpiresAt = newExpiresAt
 	if err := s.Repository.UpdateExpiresAt(ctx, roomID, room.ExpiresAt); err != nil {
 		return nil, err
 	}
