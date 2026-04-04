@@ -180,10 +180,9 @@ func (h *Hub) doExpireRoom(roomID string) {
 	}
 
 	msg := &Message{
-		Content:  "room has expired",
-		RoomID:   roomID,
-		Username: "system",
-		Type:     MessageTypeSystem,
+		Content: "room has expired",
+		RoomID:  roomID,
+		Type:    MessageTypeExpired,
 	}
 	for _, cl := range room.Clients {
 		h.trySend(cl, msg)
@@ -393,10 +392,9 @@ func (h *Hub) Run() {
 				continue
 			}
 			msg := &Message{
-				Content:  "room has been deleted",
-				RoomID:   req.roomID,
-				Username: "system",
-				Type:     MessageTypeSystem,
+				Content: "room has been deleted",
+				RoomID:  req.roomID,
+				Type:    MessageTypeDeleted,
 			}
 			for _, cl := range room.Clients {
 				h.trySend(cl, msg)

@@ -14,6 +14,8 @@ const (
 	MessageTypePresence  = "presence"
 	MessageTypeCountdown = "countdown"
 	MessageTypeKicked    = "kicked"
+	MessageTypeExpired   = "expired"
+	MessageTypeDeleted   = "deleted"
 )
 
 type Client struct {
@@ -47,6 +49,11 @@ func (c *Client) writeMessage() {
 
 	for msg := range c.Message {
 		if err := c.Conn.WriteJSON(msg); err != nil {
+			slog.Warn("websocket write error",
+				slog.String("client", c.Username),
+				slog.String("room", c.RoomID),
+				slog.String("error", err.Error()),
+			)
 			return
 		}
 	}

@@ -121,6 +121,13 @@ func (h *Handler) GetRoom(c *gin.Context) {
 
 	info := h.hub.GetRoomInfo(room.ID)
 
+	var isCreator bool
+	if userIDStr, exists := c.Get("userId"); exists {
+		if requesterID, err := strconv.ParseInt(userIDStr.(string), 10, 64); err == nil {
+			isCreator = requesterID == room.CreatorID
+		}
+	}
+
 	c.JSON(http.StatusOK, RoomRes{
 		ID:        room.ID,
 		Name:      room.Name,
@@ -128,6 +135,7 @@ func (h *Handler) GetRoom(c *gin.Context) {
 		ExpiresAt: room.ExpiresAt,
 		HasPIN:    room.PinHash != "",
 		Clients:   info.ClientCount,
+		IsCreator: isCreator,
 	})
 }
 
@@ -197,7 +205,10 @@ func (h *Handler) ExtendRoom(c *gin.Context) {
 		return
 	}
 
-	h.hub.UpdateRoomTTL(room.ID, updated.ExpiresAt)
+	if !h.hub.UpdateRoomTTL(room.ID, updated.ExpiresAt) {
+		c.JSON(http.StatusConflict, gin.H{"error": "room has already expired"})
+		return
+	}
 
 	info := h.hub.GetRoomInfo(room.ID)
 	c.JSON(http.StatusOK, RoomRes{
