@@ -80,12 +80,14 @@ export function useChatRoom(roomId: string, getUsername: () => string) {
                     ws!.close();
                     ws = null;
                     break;
+                case "expired":
+                case "deleted":
+                    push("system", msg.content);
+                    status.value = "expired";
+                    intentionalClose = true;
+                    break;
                 case "system":
                     push("system", msg.content);
-                    if (msg.content === "room has expired") {
-                        status.value = "expired";
-                        intentionalClose = true;
-                    }
                     break;
                 default:
                     push(msg.type, msg.content, msg.username);

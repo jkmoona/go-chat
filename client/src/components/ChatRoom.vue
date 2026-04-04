@@ -41,7 +41,8 @@
         </div>
 
         <!-- Online users panel -->
-        <div v-if="showUsers && onlineUsers.length > 0" class="mb-3 shrink-0 border-2 border-border p-2 bg-card">
+        <div v-if="showUsers" class="mb-3 shrink-0 border-2 border-border p-2 bg-card">
+            <p v-if="onlineUsers.length === 0" class="text-xs text-muted-foreground font-mono">no presence yet</p>
             <div class="flex flex-wrap gap-1.5">
                 <span
                     v-for="u in onlineUsers"

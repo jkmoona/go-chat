@@ -119,7 +119,7 @@ function formatExpiry(expiresAt: string): string {
 
 async function fetchRoom() {
     try {
-        const res = await fetch(`/api/ws/room/${roomId}`);
+        const res = await fetch(`/ws/room/${roomId}`);
         if (!res.ok) {
             roomError.value = true;
             roomErrorMessage.value = res.status === 404
