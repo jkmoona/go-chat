@@ -91,3 +91,20 @@ func (s *service) Deactivate(c context.Context, id string) error {
 	defer cancel()
 	return s.Repository.Deactivate(ctx, id)
 }
+
+func (s *service) ExtendTTL(c context.Context, roomID string, addMinutes int) (*Room, error) {
+	ctx, cancel := context.WithTimeout(c, s.timeout)
+	defer cancel()
+
+	room, err := s.Repository.GetByID(ctx, roomID)
+	if err != nil {
+		return nil, err
+	}
+
+	room.ExpiresAt = room.ExpiresAt.Add(time.Duration(addMinutes) * time.Minute)
+	if err := s.Repository.UpdateExpiresAt(ctx, roomID, room.ExpiresAt); err != nil {
+		return nil, err
+	}
+
+	return room, nil
+}

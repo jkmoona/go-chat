@@ -13,11 +13,13 @@ const (
 	MessageTypeTyping    = "typing"
 	MessageTypePresence  = "presence"
 	MessageTypeCountdown = "countdown"
+	MessageTypeKicked    = "kicked"
 )
 
 type Client struct {
 	Conn     *websocket.Conn
 	Message  chan *Message
+	ConnID   string
 	ID       string `json:"id"`
 	RoomID   string `json:"roomId"`
 	Username string `json:"username"`
@@ -37,27 +39,28 @@ type Message struct {
 	Type      string       `json:"type"`
 	Clients   []ClientInfo `json:"clients,omitempty"`
 	Remaining int          `json:"remaining,omitempty"`
+	SenderID  string       `json:"-"`
 }
 
 func (c *Client) writeMessage() {
-	defer func() {
-		c.Conn.Close()
-	}()
+	defer c.Conn.Close()
 
-	for {
-		message, ok := <-c.Message
-		if !ok {
+	for msg := range c.Message {
+		if err := c.Conn.WriteJSON(msg); err != nil {
 			return
 		}
-		c.Conn.WriteJSON(message)
 	}
 }
+
+const maxMessageSize = 4096
 
 func (c *Client) readMessage(hub *Hub) {
 	defer func() {
 		hub.Unregister <- c
 		c.Conn.Close()
 	}()
+
+	c.Conn.SetReadLimit(maxMessageSize)
 
 	for {
 		_, m, err := c.Conn.ReadMessage()
@@ -74,15 +77,17 @@ func (c *Client) readMessage(hub *Hub) {
 
 		var msg Message
 		if err := json.Unmarshal(m, &msg); err != nil {
-			slog.Warn("invalid message",
-				slog.String("client", c.Username),
-				slog.String("error", err.Error()),
-			)
 			continue
 		}
 
+		if len(msg.Content) == 0 || len(msg.Content) > 2000 {
+			continue
+		}
+
+		msg.Type = MessageTypeChat
 		msg.RoomID = c.RoomID
 		msg.Username = c.Username
+		msg.SenderID = c.ConnID
 
 		hub.Broadcast <- &msg
 	}

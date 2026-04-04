@@ -50,6 +50,15 @@ func (m *mockRepo) Deactivate(ctx context.Context, id string) error {
 	return nil
 }
 
+func (m *mockRepo) UpdateExpiresAt(ctx context.Context, id string, expiresAt time.Time) error {
+	r, ok := m.rooms[id]
+	if !ok {
+		return ErrRoomNotFound
+	}
+	r.ExpiresAt = expiresAt
+	return nil
+}
+
 func TestMain(m *testing.M) {
 	_ = auth.Setup("test-access", "test-refresh", false)
 	m.Run()

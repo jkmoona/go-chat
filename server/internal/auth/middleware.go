@@ -8,49 +8,46 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func AuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		tokenStr, err := c.Cookie("access_token")
-		if err != nil {
-			handleTokenRefresh(c)
-			return
-		}
-
+func extractAuth(c *gin.Context) bool {
+	tokenStr, err := c.Cookie("access_token")
+	if err == nil {
 		claims, err := ValidateAccessToken(tokenStr)
-		if err != nil {
-			handleTokenRefresh(c)
-			return
+		if err == nil {
+			c.Set("userId", claims.ID)
+			c.Set("username", claims.Username)
+			return true
 		}
-
-		c.Set("userId", claims.ID)
-		c.Set("username", claims.Username)
-
-		c.Next()
-	}
-}
-
-func handleTokenRefresh(c *gin.Context) {
-	refreshToken, err := c.Cookie("refresh_token")
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-		return
 	}
 
-	claims, err := ValidateRefreshToken(refreshToken)
+	refreshTokenStr, err := c.Cookie("refresh_token")
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
-		return
+		return false
+	}
+
+	claims, err := ValidateRefreshToken(refreshTokenStr)
+	if err != nil {
+		return false
 	}
 
 	userID, _ := strconv.ParseInt(claims.ID, 10, 64)
 	newAccessToken, err := GenerateAccessToken(userID, claims.Username, 15*time.Minute)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to generate new access token"})
-		return
+		return false
 	}
+
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("access_token", newAccessToken, 900, "/", "", SecureCookies(), true)
 	c.Set("userId", claims.ID)
 	c.Set("username", claims.Username)
-	c.Next()
+	return true
+}
+
+func AuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !extractAuth(c) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			return
+		}
+		c.Next()
+	}
 }

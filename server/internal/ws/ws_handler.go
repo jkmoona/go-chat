@@ -2,6 +2,8 @@ package ws
 
 import (
 	"net/http"
+	"strings"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -58,22 +60,30 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 		return
 	}
 
-	clientID := c.Query("userId")
-	username := c.Query("username")
+	clientID, _ := c.Get("userId")
+	username, _ := c.Get("username")
+
+	connID, err := gonanoid.New(12)
+	if err != nil {
+		conn.Close()
+		return
+	}
 
 	cl := &Client{
 		Conn:     conn,
 		Message:  make(chan *Message, 10),
-		ID:       clientID,
+		ConnID:   connID,
+		ID:       clientID.(string),
 		RoomID:   roomID,
-		Username: username,
+		Username: username.(string),
 	}
 
 	m := &Message{
-		Content:  username + " has joined the room",
+		Content:  cl.Username + " has joined the room",
 		RoomID:   roomID,
-		Username: username,
-		Type:     "system",
+		Username: cl.Username,
+		Type:     MessageTypeSystem,
+		SenderID: cl.ConnID,
 	}
 
 	h.hub.Register <- cl
@@ -83,9 +93,19 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 	cl.readMessage(h.hub)
 }
 
+func sanitizeName(name string) string {
+	var b strings.Builder
+	for _, r := range name {
+		if unicode.IsPrint(r) && !unicode.IsControl(r) {
+			b.WriteRune(r)
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
 func (h *Handler) GuestJoinRoom(c *gin.Context) {
 	roomID := c.Param("roomId")
-	name := c.Query("name")
+	name := sanitizeName(c.Query("name"))
 
 	if len(name) == 0 || len(name) > 30 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name must be between 1 and 30 characters"})
@@ -126,9 +146,16 @@ func (h *Handler) GuestJoinRoom(c *gin.Context) {
 		return
 	}
 
+	connID, err := gonanoid.New(12)
+	if err != nil {
+		conn.Close()
+		return
+	}
+
 	cl := &Client{
 		Conn:     conn,
 		Message:  make(chan *Message, 10),
+		ConnID:   connID,
 		ID:       "guest_" + guestID,
 		RoomID:   roomID,
 		Username: name,
@@ -140,6 +167,7 @@ func (h *Handler) GuestJoinRoom(c *gin.Context) {
 		RoomID:   roomID,
 		Username: name,
 		Type:     MessageTypeSystem,
+		SenderID: cl.ConnID,
 	}
 
 	h.hub.Register <- cl
@@ -152,9 +180,14 @@ func (h *Handler) GuestJoinRoom(c *gin.Context) {
 func (h *Handler) GetClients(c *gin.Context) {
 	roomID := c.Param("roomId")
 	hubClients := h.hub.GetClients(roomID)
+	seen := make(map[string]struct{})
 	clients := make([]ClientRes, 0, len(hubClients))
 
 	for _, cl := range hubClients {
+		if _, dup := seen[cl.ID]; dup {
+			continue
+		}
+		seen[cl.ID] = struct{}{}
 		clients = append(clients, ClientRes{
 			ID:       cl.ID,
 			Username: cl.Username,

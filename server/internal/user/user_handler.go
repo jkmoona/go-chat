@@ -4,11 +4,32 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/jkmoona/go-chat/server/internal/auth"
 )
+
+func bindingError(err error) string {
+	var ve validator.ValidationErrors
+	if errors.As(err, &ve) {
+		e := ve[0]
+		field := strings.ToLower(e.Field())
+		switch e.Tag() {
+		case "required":
+			return field + " is required"
+		case "min":
+			return field + " must be at least " + e.Param() + " characters"
+		case "max":
+			return field + " must be at most " + e.Param() + " characters"
+		case "alphanum":
+			return field + " must contain only letters and numbers"
+		}
+	}
+	return "invalid request"
+}
 
 type Handler struct {
 	Service
@@ -23,7 +44,7 @@ func NewHandler(s Service) *Handler {
 func (h *Handler) CreateUser(c *gin.Context) {
 	var u CreateUserReq
 	if err := c.ShouldBindJSON(&u); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": bindingError(err)})
 		return
 	}
 
@@ -44,7 +65,7 @@ func (h *Handler) CreateUser(c *gin.Context) {
 func (h *Handler) Login(c *gin.Context) {
 	var user LoginUserReq
 	if err := c.ShouldBindJSON(&user); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": bindingError(err)})
 		return
 	}
 

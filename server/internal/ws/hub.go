@@ -39,6 +39,23 @@ type getRoomInfoReq struct {
 	res    chan RoomInfo
 }
 
+type kickReq struct {
+	roomID   string
+	clientID string
+	res      chan bool
+}
+
+type updateTTLReq struct {
+	roomID    string
+	expiresAt time.Time
+	res       chan bool
+}
+
+type deleteRoomReq struct {
+	roomID string
+	res    chan bool
+}
+
 type Hub struct {
 	rooms        map[string]*Room
 	Register     chan *Client
@@ -49,6 +66,9 @@ type Hub struct {
 	getClients   chan *getClientsReq
 	getRoomInfo  chan *getRoomInfoReq
 	expireRoom   chan string
+	kick         chan *kickReq
+	updateTTL    chan *updateTTLReq
+	deleteRoom   chan *deleteRoomReq
 	done         chan struct{}
 	onRoomExpire func(string)
 	idleTimers   map[string]*time.Timer
@@ -65,6 +85,9 @@ func NewHub(onRoomExpire func(string)) *Hub {
 		getClients:   make(chan *getClientsReq),
 		getRoomInfo:  make(chan *getRoomInfoReq),
 		expireRoom:   make(chan string, 10),
+		kick:         make(chan *kickReq),
+		updateTTL:    make(chan *updateTTLReq),
+		deleteRoom:   make(chan *deleteRoomReq),
 		done:         make(chan struct{}),
 		onRoomExpire: onRoomExpire,
 		idleTimers:   make(map[string]*time.Timer),
@@ -99,9 +122,39 @@ func (h *Hub) Close() {
 	close(h.done)
 }
 
+func (h *Hub) KickClient(roomID, clientID string) bool {
+	req := &kickReq{roomID: roomID, clientID: clientID, res: make(chan bool)}
+	h.kick <- req
+	return <-req.res
+}
+
+func (h *Hub) UpdateRoomTTL(roomID string, expiresAt time.Time) bool {
+	req := &updateTTLReq{roomID: roomID, expiresAt: expiresAt, res: make(chan bool)}
+	h.updateTTL <- req
+	return <-req.res
+}
+
+func (h *Hub) DeleteRoom(roomID string) bool {
+	req := &deleteRoomReq{roomID: roomID, res: make(chan bool)}
+	h.deleteRoom <- req
+	return <-req.res
+}
+
+func (h *Hub) trySend(cl *Client, msg *Message) {
+	select {
+	case cl.Message <- msg:
+	default:
+	}
+}
+
 func (h *Hub) broadcastPresence(room *Room) {
+	seen := make(map[string]struct{})
 	clients := make([]ClientInfo, 0, len(room.Clients))
 	for _, cl := range room.Clients {
+		if _, dup := seen[cl.ID]; dup {
+			continue
+		}
+		seen[cl.ID] = struct{}{}
 		clients = append(clients, ClientInfo{
 			ID:       cl.ID,
 			Username: cl.Username,
@@ -116,7 +169,7 @@ func (h *Hub) broadcastPresence(room *Room) {
 	}
 
 	for _, cl := range room.Clients {
-		cl.Message <- msg
+		h.trySend(cl, msg)
 	}
 }
 
@@ -126,13 +179,14 @@ func (h *Hub) doExpireRoom(roomID string) {
 		return
 	}
 
+	msg := &Message{
+		Content:  "room has expired",
+		RoomID:   roomID,
+		Username: "system",
+		Type:     MessageTypeSystem,
+	}
 	for _, cl := range room.Clients {
-		cl.Message <- &Message{
-			Content:  "room has expired",
-			RoomID:   roomID,
-			Username: "system",
-			Type:     "system",
-		}
+		h.trySend(cl, msg)
 		close(cl.Message)
 	}
 
@@ -182,7 +236,7 @@ func (h *Hub) Run() {
 						Remaining: remaining,
 					}
 					for _, cl := range room.Clients {
-						cl.Message <- msg
+						h.trySend(cl, msg)
 					}
 				}
 			}
@@ -230,9 +284,7 @@ func (h *Hub) Run() {
 
 		case cl := <-h.Register:
 			if room, ok := h.rooms[cl.RoomID]; ok {
-				if _, exists := room.Clients[cl.ID]; !exists {
-					room.Clients[cl.ID] = cl
-				}
+				room.Clients[cl.ConnID] = cl
 				if t, ok := h.idleTimers[cl.RoomID]; ok {
 					t.Stop()
 					delete(h.idleTimers, cl.RoomID)
@@ -242,17 +294,21 @@ func (h *Hub) Run() {
 
 		case cl := <-h.Unregister:
 			if room, ok := h.rooms[cl.RoomID]; ok {
-				if _, exists := room.Clients[cl.ID]; exists {
-					if len(room.Clients) != 0 {
-						h.Broadcast <- &Message{
+				if _, exists := room.Clients[cl.ConnID]; exists {
+					delete(room.Clients, cl.ConnID)
+					close(cl.Message)
+
+					if len(room.Clients) > 0 {
+						msg := &Message{
 							Content:  cl.Username + " left the chat",
 							RoomID:   cl.RoomID,
 							Username: cl.Username,
-							Type:     "system",
+							Type:     MessageTypeSystem,
+						}
+						for _, c := range room.Clients {
+							h.trySend(c, msg)
 						}
 					}
-					delete(room.Clients, cl.ID)
-					close(cl.Message)
 					h.broadcastPresence(room)
 
 					if len(room.Clients) == 0 {
@@ -267,11 +323,95 @@ func (h *Hub) Run() {
 		case m := <-h.Broadcast:
 			if room, ok := h.rooms[m.RoomID]; ok {
 				for _, cl := range room.Clients {
-					if cl.Username != m.Username {
-						cl.Message <- m
+					if cl.ConnID != m.SenderID {
+						h.trySend(cl, m)
 					}
 				}
 			}
+
+		case req := <-h.kick:
+			room, ok := h.rooms[req.roomID]
+			if !ok {
+				req.res <- false
+				continue
+			}
+			kicked := false
+			var kickedUsername string
+			for connID, cl := range room.Clients {
+				if cl.ID == req.clientID {
+					if !kicked {
+						kickedUsername = cl.Username
+					}
+					h.trySend(cl, &Message{
+						Content: "You have been removed from the room",
+						RoomID:  req.roomID,
+						Type:    MessageTypeKicked,
+					})
+					delete(room.Clients, connID)
+					close(cl.Message)
+					kicked = true
+				}
+			}
+			if kicked {
+				msg := &Message{
+					Content:  kickedUsername + " was removed from the room",
+					RoomID:   req.roomID,
+					Username: kickedUsername,
+					Type:     MessageTypeSystem,
+				}
+				for _, cl := range room.Clients {
+					h.trySend(cl, msg)
+				}
+				h.broadcastPresence(room)
+			}
+			req.res <- kicked
+
+		case req := <-h.updateTTL:
+			room, ok := h.rooms[req.roomID]
+			if !ok {
+				req.res <- false
+				continue
+			}
+			room.ExpiresAt = req.expiresAt
+			remaining := int(time.Until(room.ExpiresAt).Seconds())
+			if len(room.Clients) > 0 {
+				msg := &Message{
+					Type:      MessageTypeCountdown,
+					RoomID:    room.ID,
+					Remaining: remaining,
+				}
+				for _, cl := range room.Clients {
+					h.trySend(cl, msg)
+				}
+			}
+			req.res <- true
+
+		case req := <-h.deleteRoom:
+			room, ok := h.rooms[req.roomID]
+			if !ok {
+				req.res <- false
+				continue
+			}
+			msg := &Message{
+				Content:  "room has been deleted",
+				RoomID:   req.roomID,
+				Username: "system",
+				Type:     MessageTypeSystem,
+			}
+			for _, cl := range room.Clients {
+				h.trySend(cl, msg)
+				close(cl.Message)
+			}
+			delete(h.rooms, req.roomID)
+			if t, ok := h.idleTimers[req.roomID]; ok {
+				t.Stop()
+				delete(h.idleTimers, req.roomID)
+			}
+			slog.Info("room deleted", slog.String("room_id", req.roomID), slog.String("room_name", room.Name))
+			if h.onRoomExpire != nil {
+				go h.onRoomExpire(req.roomID)
+			}
+			req.res <- true
 		}
 	}
 }

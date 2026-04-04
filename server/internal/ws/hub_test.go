@@ -76,6 +76,7 @@ func TestRegisterAndUnregister(t *testing.T) {
 	})
 
 	cl := &Client{
+		ConnID:   "conn1",
 		ID:       "client1",
 		RoomID:   "room1",
 		Username: "alice",
@@ -112,8 +113,8 @@ func TestBroadcast(t *testing.T) {
 		ExpiresAt: time.Now().Add(time.Hour),
 	})
 
-	alice := &Client{ID: "1", RoomID: "room1", Username: "alice", Message: make(chan *Message, 10)}
-	bob := &Client{ID: "2", RoomID: "room1", Username: "bob", Message: make(chan *Message, 10)}
+	alice := &Client{ConnID: "conn-a", ID: "1", RoomID: "room1", Username: "alice", Message: make(chan *Message, 10)}
+	bob := &Client{ConnID: "conn-b", ID: "2", RoomID: "room1", Username: "bob", Message: make(chan *Message, 10)}
 
 	hub.Register <- alice
 	hub.Register <- bob
@@ -127,6 +128,7 @@ func TestBroadcast(t *testing.T) {
 		RoomID:   "room1",
 		Username: "alice",
 		Type:     MessageTypeChat,
+		SenderID: "conn-a",
 	}
 
 	select {
@@ -192,7 +194,7 @@ func TestPresenceBroadcast(t *testing.T) {
 		ExpiresAt: time.Now().Add(time.Hour),
 	})
 
-	alice := &Client{ID: "1", RoomID: "room1", Username: "alice", Message: make(chan *Message, 10)}
+	alice := &Client{ConnID: "conn-1", ID: "1", RoomID: "room1", Username: "alice", Message: make(chan *Message, 10)}
 	hub.Register <- alice
 
 	select {

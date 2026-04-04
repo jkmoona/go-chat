@@ -29,6 +29,15 @@ type RoomRes struct {
 	ExpiresAt time.Time `json:"expires_at"`
 	HasPIN    bool      `json:"has_pin"`
 	Clients   int       `json:"clients"`
+	IsCreator bool      `json:"is_creator"`
+}
+
+type ExtendTTLReq struct {
+	TTL int `json:"ttl" binding:"required,oneof=15 30 60 360"`
+}
+
+type KickReq struct {
+	ClientID string `json:"client_id" binding:"required"`
 }
 
 type VerifyPINReq struct {
@@ -40,6 +49,7 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (*Room, error)
 	ListActive(ctx context.Context) ([]*Room, error)
 	Deactivate(ctx context.Context, id string) error
+	UpdateExpiresAt(ctx context.Context, id string, expiresAt time.Time) error
 }
 
 type Service interface {
@@ -48,4 +58,5 @@ type Service interface {
 	ListActiveRooms(ctx context.Context) ([]*Room, error)
 	VerifyPIN(ctx context.Context, roomID, pin string) error
 	Deactivate(ctx context.Context, id string) error
+	ExtendTTL(ctx context.Context, roomID string, addMinutes int) (*Room, error)
 }

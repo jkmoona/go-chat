@@ -22,7 +22,7 @@ func NewRouter(cfg *config.Config, userHandler *user.Handler, roomHandler *room.
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{cfg.ClientURL},
-		AllowMethods:     []string{"GET", "POST", "OPTIONS"},
+		AllowMethods:     []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
@@ -47,6 +47,9 @@ func NewRouter(cfg *config.Config, userHandler *user.Handler, roomHandler *room.
 		wsGroup.GET("/getRooms", roomHandler.ListRooms)
 		wsGroup.GET("/joinRoom/:roomId", wsHandler.JoinRoom)
 		wsGroup.GET("/getClients/:roomId", wsHandler.GetClients)
+		wsGroup.PATCH("/room/:roomId", roomHandler.ExtendRoom)
+		wsGroup.DELETE("/room/:roomId", roomHandler.DeleteRoom)
+		wsGroup.POST("/room/:roomId/kick", roomHandler.KickClient)
 	}
 
 	return r
