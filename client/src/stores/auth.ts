@@ -14,13 +14,14 @@ export const useAuthStore = defineStore("auth", {
     actions: {
         async login(username: string, password: string) {
             try {
-                const res = await apiFetch("login", {
+                const res = await fetch("/api/login", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         username: username.trim(),
                         password,
                     }),
+                    credentials: "include",
                 });
 
                 if (!res.ok) {
@@ -42,13 +43,14 @@ export const useAuthStore = defineStore("auth", {
         },
         async register(username: string, password: string) {
             try {
-                const res = await apiFetch("register", {
+                const res = await fetch("/api/register", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         username: username.trim(),
                         password,
                     }),
+                    credentials: "include",
                 });
 
                 if (!res.ok) {
