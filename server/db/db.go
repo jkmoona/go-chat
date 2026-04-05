@@ -4,19 +4,14 @@ import (
 	"database/sql"
 
 	_ "github.com/lib/pq"
-
-	"os"
 )
 
 type Database struct {
 	db *sql.DB
 }
 
-func NewDatabase() (*Database, error) {
-	dbURL := os.Getenv("DATABASE_URL")
-
+func NewDatabase(dbURL string) (*Database, error) {
 	db, err := sql.Open("postgres", dbURL)
-
 	if err != nil {
 		return nil, err
 	}

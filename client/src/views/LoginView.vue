@@ -1,104 +1,104 @@
 <template>
-    <div
-        class="flex justify-center items-center min-h-screen bg-background dark"
-    >
-        <form @submit.prevent="login" autocomplete="off">
-            <Card class="w-96">
-                <CardHeader>
-                    <CardTitle class="text-2xl"> Login </CardTitle>
-                    <CardDescription>
-                        Enter your username to login to your account
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div class="grid gap-4">
-                        <div class="grid gap-2">
-                            <Label for="username">Username</Label>
-                            <Input
-                                id="username"
-                                type="username"
-                                placeholder="guest"
+    <div class="flex justify-center items-center min-h-screen bg-background dark px-4">
+        <div class="w-full max-w-sm">
+            <!-- Brand -->
+            <div class="mb-8">
+                <h1 class="text-4xl font-black tracking-tight">TempChat</h1>
+                <div class="h-1.5 w-12 bg-primary mt-2"></div>
+                <p class="text-xs text-muted-foreground mt-2 font-mono">rooms that don't stick around</p>
+            </div>
+
+            <form @submit.prevent="login" autocomplete="off">
+                <div class="border-2 border-border p-6 neo-card">
+                    <h2 class="text-lg font-black mb-5 tracking-tight">Login</h2>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-[11px] font-black uppercase tracking-widest mb-1.5 text-muted-foreground">Username</label>
+                            <input
+                                type="text"
                                 v-model="username"
+                                placeholder="yourname"
+                                minlength="3"
+                                maxlength="30"
+                                pattern="[a-zA-Z0-9]+"
                                 required
+                                class="w-full bg-input border-2 border-border px-3 py-2 text-sm focus:outline-none focus:border-primary font-mono"
                             />
+                            <p v-if="usernameError" class="text-xs text-destructive mt-1 font-mono">{{ usernameError }}</p>
                         </div>
-                        <Label for="password">Password</Label>
-                        <Input
-                            id="password"
-                            type="password"
-                            v-model="password"
-                            required
-                        />
-                        <LoadingButton
+                        <div>
+                            <label class="block text-[11px] font-black uppercase tracking-widest mb-1.5 text-muted-foreground">Password</label>
+                            <input
+                                type="password"
+                                v-model="password"
+                                minlength="6"
+                                required
+                                class="w-full bg-input border-2 border-border px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                            />
+                            <p v-if="passwordError" class="text-xs text-destructive mt-1 font-mono">{{ passwordError }}</p>
+                        </div>
+                        <button
                             type="submit"
-                            class="w-full"
-                            :loading="loading"
-                            loadingText="Logging in..."
-                        >
-                            Login
-                        </LoadingButton>
+                            :disabled="loading"
+                            class="w-full py-2.5 text-sm font-black bg-primary text-primary-foreground border-2 border-primary neo-btn disabled:opacity-60"
+                        >{{ loading ? "Logging in..." : "Login →" }}</button>
                     </div>
-                    <div class="mt-4 text-center text-sm">
-                        Don't have an account?
-                        <RouterLink to="/register" class="underline">
-                            Sign up
-                        </RouterLink>
-                    </div>
-                </CardContent>
-            </Card>
-        </form>
+
+                    <p class="mt-5 text-xs text-center text-muted-foreground font-mono">
+                        no account?
+                        <RouterLink to="/register" class="text-primary font-black">sign up</RouterLink>
+                    </p>
+                </div>
+            </form>
+        </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import LoadingButton from "@/components/LoadingButton.vue";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { toast } from "vue-sonner";
-
 import { ref } from "vue";
 import { useAuthStore } from "@/stores/auth";
 import { useRouter } from "vue-router";
+import { toast } from "vue-sonner";
 
 const username = ref("");
 const password = ref("");
-const error = ref("");
+const usernameError = ref("");
+const passwordError = ref("");
 const loading = ref(false);
 const auth = useAuthStore();
 const router = useRouter();
 
+function validate(): boolean {
+    usernameError.value = "";
+    passwordError.value = "";
+
+    if (username.value.length < 3) {
+        usernameError.value = "Username must be at least 3 characters";
+    } else if (username.value.length > 30) {
+        usernameError.value = "Username must be at most 30 characters";
+    } else if (!/^[a-zA-Z0-9]+$/.test(username.value)) {
+        usernameError.value = "Username must contain only letters and numbers";
+    }
+
+    if (password.value.length < 6) {
+        passwordError.value = "Password must be at least 6 characters";
+    }
+
+    return !usernameError.value && !passwordError.value;
+}
+
 const login = async () => {
-    error.value = "";
+    if (!validate()) return;
     loading.value = true;
     try {
         await auth.login(username.value, password.value);
-
-        toast.success("Login successfull!", {
-            description: "Redirecting to the dashboard...",
-            duration: 1500,
-        });
-
-        setTimeout(() => {
-            router.push("/");
-            loading.value = false;
-        }, 1000);
+        toast.success("Login successful!", { description: "Redirecting...", duration: 1500 });
+        await router.push("/");
     } catch (err: unknown) {
-        if (err instanceof Error) {
-            error.value = err.message;
-        } else {
-            error.value = String(err);
-        }
-
-        toast.error("Login failed", {
-            description: error.value,
-        });
+        const message = err instanceof Error ? err.message : String(err);
+        toast.error("Login failed", { description: message });
+    } finally {
         loading.value = false;
     }
 };

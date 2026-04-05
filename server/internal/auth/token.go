@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"os"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -14,20 +14,27 @@ type MyJWTClaims struct {
 	jwt.RegisteredClaims
 }
 
-func getAccessSecret() string {
-	secret := os.Getenv("ACCESS_TOKEN_SECRET")
+var (
+	accessSecret  string
+	refreshSecret string
+	secureCookies bool
+)
 
-	if secret == "" {
-		panic("ACCESS_TOKEN_SECRET environment variable not set")
+func Setup(accessSec, refreshSec string, secure bool) error {
+	if accessSec == "" {
+		return fmt.Errorf("access token secret must not be empty")
 	}
-	return secret
+	if refreshSec == "" {
+		return fmt.Errorf("refresh token secret must not be empty")
+	}
+	accessSecret = accessSec
+	refreshSecret = refreshSec
+	secureCookies = secure
+	return nil
 }
-func getRefreshSecret() string {
-	secret := os.Getenv("REFRESH_TOKEN_SECRET")
-	if secret == "" {
-		panic("REFRESH_TOKEN_SECRET environment variable not set")
-	}
-	return secret
+
+func SecureCookies() bool {
+	return secureCookies
 }
 
 func GenerateAccessToken(userID int64, username string, duration time.Duration) (string, error) {
@@ -41,10 +48,10 @@ func GenerateAccessToken(userID int64, username string, duration time.Duration) 
 		},
 	})
 
-	secret := getAccessSecret()
-	signedToken, err := token.SignedString([]byte(secret))
+	signedToken, err := token.SignedString([]byte(accessSecret))
 	return signedToken, err
 }
+
 func GenerateRefreshToken(userID int64, username string, duration time.Duration) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, MyJWTClaims{
 		ID:       strconv.Itoa(int(userID)),
@@ -55,18 +62,14 @@ func GenerateRefreshToken(userID int64, username string, duration time.Duration)
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
 		},
 	})
-	secret := getRefreshSecret()
-	signedToken, err := token.SignedString([]byte(secret))
-	return signedToken, err
-}
 
-func SecureCookies() bool {
-	return os.Getenv("SECURE_COOKIES") != "false"
+	signedToken, err := token.SignedString([]byte(refreshSecret))
+	return signedToken, err
 }
 
 func ValidateAccessToken(tokenStr string) (*MyJWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &MyJWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return []byte(getAccessSecret()), nil
+		return []byte(accessSecret), nil
 	})
 	if err != nil {
 		return nil, err
@@ -74,21 +77,22 @@ func ValidateAccessToken(tokenStr string) (*MyJWTClaims, error) {
 
 	claims, ok := token.Claims.(*MyJWTClaims)
 	if !ok || !token.Valid {
-		return nil, err
+		return nil, fmt.Errorf("invalid token claims")
 	}
 	return claims, nil
 }
 
 func ValidateRefreshToken(tokenStr string) (*MyJWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &MyJWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return []byte(getRefreshSecret()), nil
+		return []byte(refreshSecret), nil
 	})
 	if err != nil {
 		return nil, err
 	}
+
 	claims, ok := token.Claims.(*MyJWTClaims)
 	if !ok || !token.Valid {
-		return nil, err
+		return nil, fmt.Errorf("invalid token claims")
 	}
 	return claims, nil
 }
