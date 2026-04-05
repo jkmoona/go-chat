@@ -66,6 +66,7 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 		Clients:   make(map[string]*ws.Client),
 		ExpiresAt: room.ExpiresAt,
 		HasPIN:    room.PinHash != "",
+		CreatorID: userIDStr.(string),
 	})
 
 	c.JSON(http.StatusCreated, RoomRes{

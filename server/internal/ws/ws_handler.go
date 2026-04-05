@@ -46,7 +46,9 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 		return
 	}
 
-	if info.HasPIN {
+	clientID, _ := c.Get("userId")
+
+	if info.HasPIN && clientID.(string) != info.CreatorID {
 		pin := c.Query("pin")
 		if err := h.verifyPIN(roomID, pin); err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "invalid pin"})
@@ -59,8 +61,6 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	clientID, _ := c.Get("userId")
 	username, _ := c.Get("username")
 
 	connID, err := gonanoid.New(12)

@@ -11,6 +11,7 @@ type Room struct {
 	Clients   map[string]*Client `json:"clients"`
 	ExpiresAt time.Time          `json:"expires_at"`
 	HasPIN    bool               `json:"has_pin"`
+	CreatorID string
 }
 
 type RoomInfo struct {
@@ -18,6 +19,7 @@ type RoomInfo struct {
 	HasPIN      bool
 	ExpiresAt   time.Time
 	ClientCount int
+	CreatorID   string
 }
 
 type createRoomReq struct {
@@ -287,11 +289,16 @@ func (h *Hub) Run() {
 				req.res <- RoomInfo{}
 				continue
 			}
+			seen := make(map[string]struct{})
+			for _, cl := range room.Clients {
+				seen[cl.ID] = struct{}{}
+			}
 			req.res <- RoomInfo{
 				Exists:      true,
 				HasPIN:      room.HasPIN,
 				ExpiresAt:   room.ExpiresAt,
-				ClientCount: len(room.Clients),
+				ClientCount: len(seen),
+				CreatorID:   room.CreatorID,
 			}
 
 		case cl := <-h.Register:

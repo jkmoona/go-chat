@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -122,6 +123,7 @@ func loadActiveRooms(roomSvc room.Service, hub *ws.Hub) {
 			Clients:   make(map[string]*ws.Client),
 			ExpiresAt: r.ExpiresAt,
 			HasPIN:    r.PinHash != "",
+			CreatorID: strconv.FormatInt(r.CreatorID, 10),
 		})
 	}
 
