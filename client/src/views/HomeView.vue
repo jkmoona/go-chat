@@ -43,27 +43,21 @@
                         >{{ opt.label }}</button>
                     </div>
                     <!-- PIN -->
-                    <div class="flex items-center gap-3">
-                        <label class="flex items-center gap-2 text-sm cursor-pointer select-none font-bold">
-                            <input
-                                type="checkbox"
-                                v-model="enablePIN"
-                                class="size-4 accent-primary"
-                            />
-                            PIN lock
-                        </label>
-                        <div v-if="enablePIN" class="flex flex-col">
-                            <Input
-                                v-model="newRoomPIN"
-                                type="text"
-                                inputmode="numeric"
-                                maxlength="4"
-                                placeholder="4 digits"
-                                class="w-28 border-2 border-border focus:border-primary font-mono"
-                                @input="pinError = ''"
-                            />
-                            <p v-if="pinError" class="text-xs text-destructive mt-1 font-mono">{{ pinError }}</p>
-                        </div>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <button
+                            type="button"
+                            @click="enablePIN = !enablePIN; newRoomPIN = ''; pinError = ''"
+                            :class="[
+                                'px-2.5 py-1 text-xs font-bold border-2 neo-btn',
+                                enablePIN
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : 'border-border hover:border-primary/80',
+                            ]"
+                        >PIN lock</button>
+                        <template v-if="enablePIN">
+                            <PinInput v-model="newRoomPIN" @update:model-value="pinError = ''" />
+                            <p v-if="pinError" class="text-xs text-destructive font-mono w-full">{{ pinError }}</p>
+                        </template>
                     </div>
                     <button
                         type="submit"
@@ -172,19 +166,11 @@
                             </div>
                         </div>
                         <!-- Inline PIN form -->
-                        <div v-if="pinTarget === room.id" class="mt-3 pt-3 border-t-2 border-border flex gap-2">
-                            <Input
-                                v-model="enteredPIN"
-                                type="text"
-                                inputmode="numeric"
-                                maxlength="4"
-                                placeholder="Enter PIN"
-                                class="flex-1 border-2 border-border focus:border-primary font-mono"
-                                @keydown.enter="confirmJoin(room)"
-                                autofocus
-                            />
+                        <div v-if="pinTarget === room.id" class="mt-3 pt-3 border-t-2 border-border flex gap-2 items-center flex-wrap">
+                            <PinInput v-model="enteredPIN" @complete="confirmJoin(room)" @update:model-value="pinErrors[room.id] = ''" />
                             <button @click="confirmJoin(room)" class="px-3 py-1 text-xs font-black bg-primary text-primary-foreground border-2 border-primary neo-btn">Go</button>
                             <button @click="pinTarget = null" class="px-2 py-1 text-xs font-bold border-2 border-border neo-btn hover:border-destructive hover:text-destructive">✕</button>
+                            <p v-if="pinErrors[room.id]" class="text-xs text-destructive font-mono w-full">{{ pinErrors[room.id] }}</p>
                         </div>
                     </div>
 
@@ -213,6 +199,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "vue-sonner";
 import { Link2 } from "lucide-vue-next";
 import LoadingButton from "@/components/LoadingButton.vue";
+import PinInput from "@/components/PinInput.vue";
 
 const newRoomTTLOptions = [
     { value: 15, label: "15m" },
@@ -242,6 +229,7 @@ const loadError = ref("");
 const loading = ref(false);
 const pinTarget = ref<string | null>(null);
 const enteredPIN = ref("");
+const pinErrors = ref<Record<string, string>>({});
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -319,12 +307,13 @@ async function createRoom() {
 }
 
 function handleJoin(room: Room) {
-    if (room.has_pin) {
+    if (room.has_pin && !room.is_creator) {
         if (pinTarget.value === room.id) {
             pinTarget.value = null;
         } else {
             pinTarget.value = room.id;
             enteredPIN.value = "";
+            pinErrors.value[room.id] = "";
         }
         return;
     }
@@ -332,12 +321,26 @@ function handleJoin(room: Room) {
     router.push({ name: "Room", params: { roomId: room.id } });
 }
 
-function confirmJoin(room: Room) {
+async function confirmJoin(room: Room) {
     if (!/^\d{4}$/.test(enteredPIN.value)) {
-        toast.error("PIN must be exactly 4 digits");
+        pinErrors.value[room.id] = "PIN must be exactly 4 digits";
         return;
     }
     const pin = enteredPIN.value;
+    try {
+        const res = await apiFetch(`/ws/room/${room.id}/verify`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pin }),
+        });
+        if (!res.ok) {
+            pinErrors.value[room.id] = "Invalid PIN";
+            return;
+        }
+    } catch {
+        pinErrors.value[room.id] = "Could not verify PIN";
+        return;
+    }
     pinTarget.value = null;
     enteredPIN.value = "";
     roomStore.setRoom(room.id, room.name);

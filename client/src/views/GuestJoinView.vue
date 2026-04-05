@@ -30,14 +30,7 @@
                         </div>
                         <div v-if="room.has_pin">
                             <label class="block text-[11px] font-black uppercase tracking-widest mb-1.5 text-muted-foreground">Room PIN</label>
-                            <input
-                                v-model="pin"
-                                type="text"
-                                inputmode="numeric"
-                                maxlength="4"
-                                placeholder="4 digits"
-                                class="w-full bg-input border-2 border-border px-3 py-2 text-sm focus:outline-none focus:border-primary font-mono"
-                            />
+                            <PinInput v-model="pin" />
                         </div>
                         <p v-if="joinError" class="text-xs text-destructive font-mono">{{ joinError }}</p>
                         <button
@@ -85,6 +78,7 @@ import { useChatRoom } from "@/composables/useChatRoom";
 import { toast } from "vue-sonner";
 
 import ChatRoom from "@/components/ChatRoom.vue";
+import PinInput from "@/components/PinInput.vue";
 
 interface RoomInfo {
     id: string;
