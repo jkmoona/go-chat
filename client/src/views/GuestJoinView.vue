@@ -60,6 +60,7 @@
                 :messages="chat.messages.value"
                 :online-users="chat.onlineUsers.value"
                 :remaining="chat.remaining.value"
+                :total-remaining="chat.totalRemaining.value"
                 :connection-status="chat.status.value"
                 :formatted-remaining="chat.formattedRemaining.value"
                 :username="guestName"
@@ -128,6 +129,7 @@ async function fetchRoom() {
             return;
         }
         room.value = await res.json();
+        chat.seedTotal(room.value!.ttl * 60);
     } catch {
         roomError.value = true;
         roomErrorMessage.value = "Network error. Please check your connection.";

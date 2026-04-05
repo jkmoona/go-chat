@@ -81,9 +81,9 @@
             >{{ formattedRemaining }}</span>
             <div class="flex-1 h-1 bg-muted overflow-hidden">
                 <div
-                    class="h-full transition-colors"
+                    class="h-full transition-all duration-1000 ease-linear"
                     :class="remaining < 60 ? 'bg-destructive animate-pulse' : 'bg-primary'"
-                    style="width: 100%"
+                    :style="{ width: totalRemaining ? `${(remaining / totalRemaining) * 100}%` : '100%' }"
                 ></div>
             </div>
         </div>
@@ -119,6 +119,7 @@ const props = defineProps<{
     messages: ChatMessage[];
     onlineUsers: ClientInfo[];
     remaining: number;
+    totalRemaining: number;
     connectionStatus: ConnectionStatus;
     formattedRemaining: string;
     username: string;

@@ -118,10 +118,18 @@ func TestBroadcast(t *testing.T) {
 
 	hub.Register <- alice
 	hub.Register <- bob
-	// drain presence messages
-	<-alice.Message
-	<-alice.Message
-	<-bob.Message
+	// drain presence + countdown messages sent on join
+	drainMessages := func(cl *Client) {
+		for {
+			select {
+			case <-cl.Message:
+			default:
+				return
+			}
+		}
+	}
+	drainMessages(alice)
+	drainMessages(bob)
 
 	hub.Broadcast <- &Message{
 		Content:  "hello",

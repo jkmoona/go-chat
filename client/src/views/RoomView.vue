@@ -6,6 +6,7 @@
                 :messages="chat.messages.value"
                 :online-users="chat.onlineUsers.value"
                 :remaining="chat.remaining.value"
+                :total-remaining="chat.totalRemaining.value"
                 :connection-status="chat.status.value"
                 :formatted-remaining="chat.formattedRemaining.value"
                 :username="username"
@@ -198,6 +199,7 @@ onMounted(async () => {
             const data = await res.json();
             roomStore.setRoom(data.id, data.name);
             isCreator.value = data.is_creator ?? false;
+            chat.seedTotal(data.ttl * 60);
         }
     } catch {
         // room info fetch failed, proceed with chat

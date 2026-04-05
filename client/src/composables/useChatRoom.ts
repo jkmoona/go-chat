@@ -29,6 +29,7 @@ export function useChatRoom(roomId: string, getUsername: () => string) {
     const messages = ref<ChatMessage[]>([]);
     const onlineUsers = ref<ClientInfo[]>([]);
     const remaining = ref(0);
+    const totalRemaining = ref(0);
     const status = ref<ConnectionStatus>("idle");
     const closeCode = ref(0);
     const closeReason = ref("");
@@ -37,11 +38,15 @@ export function useChatRoom(roomId: string, getUsername: () => string) {
     let intentionalClose = false;
     let attempts = 0;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let countdownTimer: ReturnType<typeof setInterval> | null = null;
     let currentUrl = "";
 
     const formattedRemaining = computed(() => {
-        const m = Math.floor(remaining.value / 60);
-        const s = remaining.value % 60;
+        const total = remaining.value;
+        const h = Math.floor(total / 3600);
+        const m = Math.floor((total % 3600) / 60);
+        const s = total % 60;
+        if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
         return `${m}:${s.toString().padStart(2, "0")}`;
     });
 
@@ -72,6 +77,12 @@ export function useChatRoom(roomId: string, getUsername: () => string) {
                     break;
                 case "countdown":
                     remaining.value = msg.remaining;
+                    if (!totalRemaining.value) totalRemaining.value = msg.remaining;
+                    if (!countdownTimer) {
+                        countdownTimer = setInterval(() => {
+                            if (remaining.value > 0) remaining.value--;
+                        }, 1000);
+                    }
                     break;
                 case "kicked":
                     push("system", msg.content);
@@ -122,6 +133,10 @@ export function useChatRoom(roomId: string, getUsername: () => string) {
             clearTimeout(reconnectTimer);
             reconnectTimer = null;
         }
+        if (countdownTimer) {
+            clearInterval(countdownTimer);
+            countdownTimer = null;
+        }
         if (ws) {
             ws.close();
             ws = null;
@@ -136,6 +151,10 @@ export function useChatRoom(roomId: string, getUsername: () => string) {
         return true;
     }
 
+    function seedTotal(seconds: number) {
+        if (!totalRemaining.value) totalRemaining.value = seconds;
+    }
+
     function retry() {
         attempts = 0;
         connect(currentUrl);
@@ -147,6 +166,7 @@ export function useChatRoom(roomId: string, getUsername: () => string) {
         messages,
         onlineUsers,
         remaining,
+        totalRemaining,
         status,
         formattedRemaining,
         closeCode,
@@ -155,5 +175,6 @@ export function useChatRoom(roomId: string, getUsername: () => string) {
         disconnect,
         send,
         retry,
+        seedTotal,
     };
 }

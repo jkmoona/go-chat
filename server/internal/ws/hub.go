@@ -228,7 +228,7 @@ func (h *Hub) Run() {
 				}
 
 				remaining := int(time.Until(room.ExpiresAt).Seconds())
-				if remaining <= 300 && len(room.Clients) > 0 {
+				if len(room.Clients) > 0 {
 					msg := &Message{
 						Type:      MessageTypeCountdown,
 						RoomID:    room.ID,
@@ -289,6 +289,14 @@ func (h *Hub) Run() {
 					delete(h.idleTimers, cl.RoomID)
 				}
 				h.broadcastPresence(room)
+				remaining := int(time.Until(room.ExpiresAt).Seconds())
+				if remaining > 0 {
+					h.trySend(cl, &Message{
+						Type:      MessageTypeCountdown,
+						RoomID:    room.ID,
+						Remaining: remaining,
+					})
+				}
 			}
 
 		case cl := <-h.Unregister:

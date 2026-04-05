@@ -64,6 +64,8 @@ func main() {
 		}
 	})
 
+	go hub.Run()
+
 	loadActiveRooms(roomSvc, hub)
 
 	roomHandler := room.NewHandler(roomSvc, hub)
@@ -72,8 +74,6 @@ func main() {
 		return roomSvc.VerifyPIN(context.Background(), roomID, pin)
 	}
 	wsHandler := ws.NewHandler(hub, cfg.ClientURL, verifyPIN)
-
-	go hub.Run()
 
 	r := router.NewRouter(cfg, userHandler, roomHandler, wsHandler)
 
