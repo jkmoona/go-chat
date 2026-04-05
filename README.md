@@ -2,35 +2,32 @@
 
 [![CI](https://github.com/jkmoona/go-chat/actions/workflows/ci.yml/badge.svg)](https://github.com/jkmoona/go-chat/actions/workflows/ci.yml)
 
-Disposable chat rooms that self-destruct. Pick a TTL, share the link, talk. When time's up, the room and everything in it is gone. Messages are never saved to disk.
+Disposable chat rooms. Set a TTL, share the link, talk. When time's up, the room and everything in it is gone. Messages are never written to disk.
 
-[tempchatgo.up.railway.app](https://tempchatgo.up.railway.app)
+Live: [tempchatgo.up.railway.app](https://tempchatgo.up.railway.app)
 
-## What it does
-
-- Rooms automatically expire after a set time (15 minutes to 24 hours), and empty rooms are removed after 5 minutes of inactivity
-- Optionally, rooms can be locked with a 4-digit PIN (securely hashed with bcrypt)
-- Anyone with the link can join as a guest without signing up
-- Live typing indicators, who's-online list, and a countdown timer as the room approaches expiry
-- Auth uses JWT access + refresh tokens in HTTP-only cookies
-
-## How it's built
-
-```text
-  Vue 3 SPA ──── Caddy ──── Go (Gin + WebSocket) ──── PostgreSQL
-                         all on Railway
-```
-
-Room metadata (name, TTL, PIN hash) is in Postgres. Messages only exist in memory — they're broadcast over WebSocket and never touch the database.
+## Stack
 
 | | |
 | --- | --- |
 | Backend | Go 1.23, Gin, gorilla/websocket |
 | Database | PostgreSQL 15 |
-| Auth | JWT (access + refresh), bcrypt |
+| Auth | JWT (access + refresh tokens), bcrypt |
 | Frontend | Vue 3, TypeScript, Tailwind CSS |
 | Infra | Docker, Caddy, Railway |
 | CI | GitHub Actions |
+
+Room metadata lives in Postgres. Messages live only in memory and are broadcast over WebSocket — nothing is persisted.
+
+## Features
+
+- TTL between 15 minutes and 24 hours, extendable by the room creator
+- Optional 4-digit PIN lock (bcrypt-hashed)
+- Guest access without an account
+- Live presence list and countdown bar
+- Room creator can kick users, extend TTL, or delete the room
+- Empty rooms auto-expire after 5 minutes of inactivity
+- WebSocket heartbeat to detect and clean up silent disconnects
 
 ## Dev setup
 
