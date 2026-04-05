@@ -147,6 +147,19 @@ func (h *Hub) trySend(cl *Client, msg *Message) {
 	}
 }
 
+// drainAndSend drains any buffered messages then delivers msg, guaranteeing
+// delivery for high-priority notifications (expire, delete) before channel close.
+func drainAndSend(cl *Client, msg *Message) {
+	for {
+		select {
+		case <-cl.Message:
+		default:
+			cl.Message <- msg
+			return
+		}
+	}
+}
+
 func (h *Hub) broadcastPresence(room *Room) {
 	seen := make(map[string]struct{})
 	clients := make([]ClientInfo, 0, len(room.Clients))
@@ -185,7 +198,7 @@ func (h *Hub) doExpireRoom(roomID string) {
 		Type:    MessageTypeExpired,
 	}
 	for _, cl := range room.Clients {
-		h.trySend(cl, msg)
+		drainAndSend(cl, msg)
 		close(cl.Message)
 	}
 
@@ -405,7 +418,7 @@ func (h *Hub) Run() {
 				Type:    MessageTypeDeleted,
 			}
 			for _, cl := range room.Clients {
-				h.trySend(cl, msg)
+				drainAndSend(cl, msg)
 				close(cl.Message)
 			}
 			delete(h.rooms, req.roomID)
