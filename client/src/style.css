@@ -137,13 +137,19 @@
 }
 
 .bg-user {
-  background-color: oklch(0.85 0.19 95);
+  background-color: oklch(0.82 0.10 95);
   color: oklch(0.08 0 0);
 }
 
 .bg-other {
-  background-color: oklch(0.91 0 0);
-  color: oklch(0.08 0 0);
+  background-color: oklch(0.22 0.004 285);
+  color: oklch(0.92 0 0);
+}
+
+[data-sonner-toaster] [data-sonner-toast] {
+  box-shadow: 3px 3px 0 oklch(0.62 0 0 / 0.5) !important;
+  border-width: 2px !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
 }
 
 @layer base {
