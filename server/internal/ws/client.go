@@ -61,9 +61,11 @@ func (c *Client) writeMessage() {
 	for {
 		select {
 		case msg, ok := <-c.Message:
-			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.Conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				return
+			}
 			if !ok {
-				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 			if err := c.Conn.WriteJSON(msg); err != nil {
@@ -75,7 +77,9 @@ func (c *Client) writeMessage() {
 				return
 			}
 		case <-ticker.C:
-			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.Conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				return
+			}
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -92,10 +96,11 @@ func (c *Client) readMessage(hub *Hub) {
 	}()
 
 	c.Conn.SetReadLimit(maxMessageSize)
-	c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	if err := c.Conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+		return
+	}
 	c.Conn.SetPongHandler(func(string) error {
-		c.Conn.SetReadDeadline(time.Now().Add(pongWait))
-		return nil
+		return c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 	})
 
 	for {
