@@ -25,7 +25,7 @@
                                 maxlength="30"
                                 required
                                 autofocus
-                                class="w-full bg-input border-2 border-border px-3 py-2 text-sm focus:outline-none focus:border-primary font-mono"
+                                class="w-full bg-input border-2 border-border px-3 py-2 text-base focus:outline-none focus:border-primary font-mono"
                             />
                         </div>
                         <div v-if="room.has_pin">

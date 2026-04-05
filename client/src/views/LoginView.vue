@@ -23,7 +23,7 @@
                                 maxlength="30"
                                 pattern="[a-zA-Z0-9]+"
                                 required
-                                class="w-full bg-input border-2 border-border px-3 py-2 text-sm focus:outline-none focus:border-primary font-mono"
+                                class="w-full bg-input border-2 border-border px-3 py-2 text-base focus:outline-none focus:border-primary font-mono"
                             />
                             <p v-if="usernameError" class="text-xs text-destructive mt-1 font-mono">{{ usernameError }}</p>
                         </div>
@@ -34,7 +34,7 @@
                                 v-model="password"
                                 minlength="6"
                                 required
-                                class="w-full bg-input border-2 border-border px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                                class="w-full bg-input border-2 border-border px-3 py-2 text-base focus:outline-none focus:border-primary font-mono"
                             />
                             <p v-if="passwordError" class="text-xs text-destructive mt-1 font-mono">{{ passwordError }}</p>
                         </div>

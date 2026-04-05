@@ -118,6 +118,8 @@ func TestBroadcast(t *testing.T) {
 
 	hub.Register <- alice
 	hub.Register <- bob
+	// wait for hub to finish post-registration sends before draining
+	time.Sleep(50 * time.Millisecond)
 	// drain presence + countdown messages sent on join
 	drainMessages := func(cl *Client) {
 		for {

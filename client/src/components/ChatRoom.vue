@@ -94,7 +94,7 @@
                 v-model="newMessage"
                 ref="inputEl"
                 placeholder="type a message..."
-                class="flex-1 bg-input border-2 border-border border-r-0 px-3 py-2 text-sm focus:outline-none focus:border-primary font-mono disabled:opacity-40"
+                class="flex-1 bg-input border-2 border-border border-r-0 px-3 py-2 text-base focus:outline-none focus:border-primary font-mono disabled:opacity-40"
                 :disabled="connectionStatus !== 'connected'"
             />
             <button
@@ -153,5 +153,9 @@ watch(
     },
 );
 
-onMounted(() => inputEl.value?.focus());
+onMounted(() => {
+    if (!window.matchMedia("(hover: none)").matches) {
+        inputEl.value?.focus();
+    }
+});
 </script>
