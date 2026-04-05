@@ -3,6 +3,7 @@ package room
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 )
 
@@ -45,7 +46,7 @@ func (r *repository) GetByID(ctx context.Context, id string) (*Room, error) {
 		&room.TTL, &room.CreatedAt, &room.ExpiresAt, &room.IsActive,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRoomNotFound
 		}
 		return nil, err

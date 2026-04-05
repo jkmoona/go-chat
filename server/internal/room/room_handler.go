@@ -2,6 +2,7 @@ package room
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -233,7 +234,9 @@ func (h *Handler) DeleteRoom(c *gin.Context) {
 	}
 
 	h.hub.DeleteRoom(room.ID)
-	_ = h.svc.Deactivate(c.Request.Context(), room.ID)
+	if err := h.svc.Deactivate(c.Request.Context(), room.ID); err != nil {
+		slog.Error("failed to deactivate deleted room", slog.String("room_id", room.ID), slog.String("error", err.Error()))
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "room deleted"})
 }

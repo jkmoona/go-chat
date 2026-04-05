@@ -14,6 +14,7 @@ type Handler struct {
 	hub       *Hub
 	clientURL string
 	verifyPIN func(roomID, pin string) error
+	upgrader  websocket.Upgrader
 }
 
 type ClientRes struct {
@@ -26,6 +27,13 @@ func NewHandler(h *Hub, clientURL string, verifyPIN func(roomID, pin string) err
 		hub:       h,
 		clientURL: clientURL,
 		verifyPIN: verifyPIN,
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  1024,
+			WriteBufferSize: 1024,
+			CheckOrigin: func(r *http.Request) bool {
+				return r.Header.Get("Origin") == clientURL
+			},
+		},
 	}
 }
 
@@ -46,15 +54,7 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 		}
 	}
 
-	upgrader := websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
-		CheckOrigin: func(r *http.Request) bool {
-			return r.Header.Get("Origin") == h.clientURL
-		},
-	}
-
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -132,15 +132,7 @@ func (h *Handler) GuestJoinRoom(c *gin.Context) {
 		return
 	}
 
-	upgrader := websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
-		CheckOrigin: func(r *http.Request) bool {
-			return r.Header.Get("Origin") == h.clientURL
-		},
-	}
-
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

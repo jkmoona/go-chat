@@ -3,8 +3,15 @@ package ws
 import (
 	"encoding/json"
 	"log/slog"
+	"time"
 
 	"github.com/gorilla/websocket"
+)
+
+const (
+	pongWait   = 60 * time.Second
+	pingPeriod = 45 * time.Second
+	writeWait  = 10 * time.Second
 )
 
 const (
@@ -45,16 +52,33 @@ type Message struct {
 }
 
 func (c *Client) writeMessage() {
-	defer c.Conn.Close()
+	ticker := time.NewTicker(pingPeriod)
+	defer func() {
+		ticker.Stop()
+		c.Conn.Close()
+	}()
 
-	for msg := range c.Message {
-		if err := c.Conn.WriteJSON(msg); err != nil {
-			slog.Warn("websocket write error",
-				slog.String("client", c.Username),
-				slog.String("room", c.RoomID),
-				slog.String("error", err.Error()),
-			)
-			return
+	for {
+		select {
+		case msg, ok := <-c.Message:
+			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if !ok {
+				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+			if err := c.Conn.WriteJSON(msg); err != nil {
+				slog.Warn("websocket write error",
+					slog.String("client", c.Username),
+					slog.String("room", c.RoomID),
+					slog.String("error", err.Error()),
+				)
+				return
+			}
+		case <-ticker.C:
+			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
 	}
 }
@@ -68,6 +92,11 @@ func (c *Client) readMessage(hub *Hub) {
 	}()
 
 	c.Conn.SetReadLimit(maxMessageSize)
+	c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.Conn.SetPongHandler(func(string) error {
+		c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
 
 	for {
 		_, m, err := c.Conn.ReadMessage()
