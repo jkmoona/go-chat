@@ -1,7 +1,7 @@
 <template>
     <div class="flex flex-col h-full">
         <!-- Header -->
-        <div class="flex justify-between items-center mb-3 shrink-0 pb-3 border-b-2 border-border">
+        <div class="flex justify-between items-center mb-2 shrink-0 pb-2 border-b-2 border-border">
             <div class="min-w-0 border-l-4 border-primary pl-3">
                 <h1 class="text-lg font-black tracking-tight truncate">{{ roomName }}</h1>
                 <p v-if="subtitle" class="text-xs text-muted-foreground font-mono">{{ subtitle }}</p>
@@ -41,7 +41,7 @@
         </div>
 
         <!-- Online users panel -->
-        <div v-if="showUsers" class="mb-3 shrink-0 border-2 border-border p-2 bg-card">
+        <div v-if="showUsers" class="mb-2 shrink-0 border-2 border-border p-2 bg-card">
             <p v-if="onlineUsers.length === 0" class="text-xs text-muted-foreground font-mono">no presence yet</p>
             <div class="flex flex-wrap gap-1.5">
                 <span
@@ -63,7 +63,7 @@
         </div>
 
         <!-- Messages -->
-        <div class="flex-1 overflow-y-auto border-2 border-border p-3 mb-3 space-y-1.5 bg-card">
+        <div class="flex-1 overflow-y-auto border-2 border-border p-3 mb-2 space-y-1.5 bg-card">
             <ChatMessageCard
                 v-for="(msg, index) in messages"
                 :key="index"
@@ -74,7 +74,7 @@
         </div>
 
         <!-- Countdown -->
-        <div v-if="remaining > 0" class="mb-2 shrink-0 flex items-center gap-2">
+        <div v-if="remaining > 0" class="mb-1.5 shrink-0 flex items-center gap-2">
             <span
                 class="text-xs font-mono font-bold tabular-nums shrink-0"
                 :class="remaining < 60 ? 'text-destructive' : 'text-muted-foreground'"
@@ -94,6 +94,7 @@
                 v-model="newMessage"
                 ref="inputEl"
                 placeholder="type a message..."
+                autocomplete="off"
                 class="flex-1 bg-input border-2 border-border border-r-0 px-3 py-2 text-base focus:outline-none focus:border-primary font-mono disabled:opacity-40"
                 :disabled="connectionStatus !== 'connected'"
             />
@@ -107,7 +108,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted } from "vue";
+import { ref, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import type { ChatMessage, ClientInfo, ConnectionStatus } from "@/composables/useChatRoom";
 
 import { X } from "lucide-vue-next";
@@ -147,15 +148,25 @@ function handleSend() {
 
 watch(
     () => props.messages.length,
-    async () => {
-        await nextTick();
-        bottomEl.value?.scrollIntoView({ behavior: "smooth" });
-    },
+    () => scrollToBottom(),
 );
 
+function scrollToBottom() {
+    nextTick(() => bottomEl.value?.scrollIntoView({ behavior: "smooth" }));
+}
+
+function scrollToBottomInstant() {
+    nextTick(() => bottomEl.value?.scrollIntoView({ behavior: "instant" }));
+}
+
 onMounted(() => {
+    window.visualViewport?.addEventListener("resize", scrollToBottomInstant);
     if (!window.matchMedia("(hover: none)").matches) {
         inputEl.value?.focus();
     }
+});
+
+onBeforeUnmount(() => {
+    window.visualViewport?.removeEventListener("resize", scrollToBottomInstant);
 });
 </script>

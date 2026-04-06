@@ -20,11 +20,11 @@
                         <div>
                             <label class="block text-[11px] font-black uppercase tracking-widest mb-1.5 text-muted-foreground">Your name</label>
                             <input
+                                ref="nameInputEl"
                                 v-model="guestName"
                                 placeholder="enter a name"
                                 maxlength="30"
                                 required
-                                autofocus
                                 class="w-full bg-input border-2 border-border px-3 py-2 text-base focus:outline-none focus:border-primary font-mono"
                             />
                         </div>
@@ -72,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, watch, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { useChatRoom } from "@/composables/useChatRoom";
 import { toast } from "vue-sonner";
@@ -100,6 +100,13 @@ const pin = ref("");
 const joinError = ref("");
 const joining = ref(false);
 const joined = ref(false);
+const nameInputEl = ref<HTMLInputElement | null>(null);
+
+onMounted(() => {
+    if (!window.matchMedia("(hover: none)").matches) {
+        nameInputEl.value?.focus();
+    }
+});
 
 const chat = useChatRoom(roomId, () => guestName.value.trim());
 
