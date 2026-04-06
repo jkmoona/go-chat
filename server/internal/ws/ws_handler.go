@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/jkmoona/go-chat/server/internal/auth"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
@@ -46,9 +47,13 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 		return
 	}
 
-	clientID, _ := c.Get("userId")
+	clientID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
 
-	if info.HasPIN && clientID.(string) != info.CreatorID {
+	if info.HasPIN && clientID != info.CreatorID {
 		pin := c.Query("pin")
 		if err := h.verifyPIN(roomID, pin); err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "invalid pin"})
@@ -58,10 +63,14 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 
 	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "connection upgrade failed"})
 		return
 	}
-	username, _ := c.Get("username")
+	username, ok := auth.GetUsername(c)
+	if !ok {
+		conn.Close()
+		return
+	}
 
 	connID, err := gonanoid.New(12)
 	if err != nil {
@@ -73,9 +82,9 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 		Conn:     conn,
 		Message:  make(chan *Message, 10),
 		ConnID:   connID,
-		ID:       clientID.(string),
+		ID:       clientID,
 		RoomID:   roomID,
-		Username: username.(string),
+		Username: username,
 	}
 
 	m := &Message{
@@ -134,7 +143,7 @@ func (h *Handler) GuestJoinRoom(c *gin.Context) {
 
 	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "connection upgrade failed"})
 		return
 	}
 
@@ -172,19 +181,12 @@ func (h *Handler) GuestJoinRoom(c *gin.Context) {
 func (h *Handler) GetClients(c *gin.Context) {
 	roomID := c.Param("roomId")
 	hubClients := h.hub.GetClients(roomID)
-	seen := make(map[string]struct{})
 	clients := make([]ClientRes, 0, len(hubClients))
-
 	for _, cl := range hubClients {
-		if _, dup := seen[cl.ID]; dup {
-			continue
-		}
-		seen[cl.ID] = struct{}{}
 		clients = append(clients, ClientRes{
 			ID:       cl.ID,
 			Username: cl.Username,
 		})
 	}
-
 	c.JSON(http.StatusOK, clients)
 }
