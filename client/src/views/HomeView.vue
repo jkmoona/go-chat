@@ -104,34 +104,38 @@
                                 </div>
                             </div>
                             <!-- Management controls -->
-                            <div class="flex items-center gap-1.5 mt-3 pt-3 border-t-2 border-border flex-wrap">
-                                <span class="text-[10px] font-mono text-muted-foreground">extend:</span>
-                                <button
-                                    v-for="opt in extendTTLOptions"
-                                    :key="opt.value"
-                                    type="button"
-                                    @click="extendSelections[room.id] = extendSelections[room.id] === opt.value ? '' : opt.value"
-                                    :class="[
-                                        'px-2 py-0.5 text-[11px] font-bold border-2 neo-btn',
-                                        extendSelections[room.id] === opt.value
-                                            ? 'bg-primary text-primary-foreground border-primary'
-                                            : 'border-border hover:border-primary/80',
-                                    ]"
-                                >{{ opt.label }}</button>
-                                <button
-                                    :disabled="!extendSelections[room.id]"
-                                    @click="extendRoom(room)"
-                                    class="px-2 py-0.5 text-[11px] font-bold border-2 border-border neo-btn hover:bg-primary hover:text-primary-foreground hover:border-primary disabled:opacity-30 disabled:cursor-not-allowed"
-                                >Extend</button>
-                                <button
-                                    @click="handleDeleteRoom(room)"
-                                    :class="[
-                                        'ml-auto px-2 py-0.5 text-[11px] font-bold border-2 neo-btn',
-                                        deleteConfirming[room.id]
-                                            ? 'border-destructive text-destructive bg-destructive/10 animate-pulse'
-                                            : 'border-border hover:border-destructive hover:text-destructive',
-                                    ]"
-                                >{{ deleteConfirming[room.id] ? "Sure?" : "Delete" }}</button>
+                            <div class="mt-3 pt-3 border-t-2 border-border space-y-2">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="text-[10px] font-mono text-muted-foreground">extend:</span>
+                                    <button
+                                        v-for="opt in extendTTLOptions"
+                                        :key="opt.value"
+                                        type="button"
+                                        @click="extendSelections[room.id] = extendSelections[room.id] === opt.value ? '' : opt.value"
+                                        :class="[
+                                            'px-2 py-0.5 text-[11px] font-bold border-2 neo-btn',
+                                            extendSelections[room.id] === opt.value
+                                                ? 'bg-primary text-primary-foreground border-primary'
+                                                : 'border-border hover:border-primary/80',
+                                        ]"
+                                    >{{ opt.label }}</button>
+                                    <button
+                                        :disabled="!extendSelections[room.id]"
+                                        @click="extendRoom(room)"
+                                        class="px-2 py-0.5 text-[11px] font-bold border-2 border-border neo-btn hover:bg-primary hover:text-primary-foreground hover:border-primary disabled:opacity-30 disabled:cursor-not-allowed"
+                                    >Extend</button>
+                                </div>
+                                <div class="flex justify-end">
+                                    <button
+                                        @click="handleDeleteRoom(room)"
+                                        :class="[
+                                            'px-2 py-0.5 text-[11px] font-bold border-2 neo-btn',
+                                            deleteConfirming[room.id]
+                                                ? 'border-destructive text-destructive bg-destructive/10 animate-pulse'
+                                                : 'border-border hover:border-destructive hover:text-destructive',
+                                        ]"
+                                    >{{ deleteConfirming[room.id] ? "Sure?" : "Delete" }}</button>
+                                </div>
                             </div>
                         </div>
                     </template>

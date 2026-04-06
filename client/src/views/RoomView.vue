@@ -32,33 +32,41 @@
                     >Leave</button>
                 </template>
                 <template v-if="isCreator" #management>
-                    <div class="flex items-center gap-1.5 mb-3 shrink-0 flex-wrap border-b-2 border-border pb-3">
-                        <span class="text-xs font-mono text-muted-foreground mr-1">extend:</span>
+                    <div class="mb-2 shrink-0 border-b-2 border-border pb-2">
                         <button
-                            v-for="opt in ttlOptions"
-                            :key="opt.value"
-                            @click="extendTTL = extendTTL === opt.value ? '' : opt.value"
-                            :class="[
-                                'px-2.5 py-1 text-xs font-bold border-2 neo-btn',
-                                extendTTL === opt.value
-                                    ? 'bg-primary text-primary-foreground border-primary'
-                                    : 'border-border hover:border-primary/80',
-                            ]"
-                        >{{ opt.label }}</button>
-                        <button
-                            :disabled="!extendTTL"
-                            @click="extendRoom"
-                            class="px-2.5 py-1 text-xs font-bold border-2 border-border neo-btn hover:bg-primary hover:text-primary-foreground hover:border-primary disabled:opacity-30 disabled:cursor-not-allowed"
-                        >Extend</button>
-                        <button
-                            @click="handleDeleteClick"
-                            :class="[
-                                'ml-auto px-2.5 py-1 text-xs font-bold border-2 neo-btn',
-                                deleteConfirming
-                                    ? 'border-destructive text-destructive bg-destructive/10 animate-pulse'
-                                    : 'border-border hover:border-destructive hover:text-destructive',
-                            ]"
-                        >{{ deleteConfirming ? "Sure?" : "Delete Room" }}</button>
+                            @click="showManagement = !showManagement"
+                            class="text-[11px] font-mono text-muted-foreground hover:text-foreground"
+                        >manage {{ showManagement ? '▴' : '▾' }}</button>
+                        <div v-if="showManagement" class="mt-2 space-y-1.5">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="text-xs font-mono text-muted-foreground mr-1">extend:</span>
+                                <button
+                                    v-for="opt in ttlOptions"
+                                    :key="opt.value"
+                                    @click="extendTTL = extendTTL === opt.value ? '' : opt.value"
+                                    :class="[
+                                        'px-2.5 py-1 text-xs font-bold border-2 neo-btn',
+                                        extendTTL === opt.value
+                                            ? 'bg-primary text-primary-foreground border-primary'
+                                            : 'border-border hover:border-primary/80',
+                                    ]"
+                                >{{ opt.label }}</button>
+                                <button
+                                    :disabled="!extendTTL"
+                                    @click="extendRoom"
+                                    class="px-2.5 py-1 text-xs font-bold border-2 border-border neo-btn hover:bg-primary hover:text-primary-foreground hover:border-primary disabled:opacity-30 disabled:cursor-not-allowed"
+                                >Extend</button>
+                                <button
+                                    @click="handleDeleteClick"
+                                    :class="[
+                                        'ml-auto px-2.5 py-1 text-xs font-bold border-2 neo-btn',
+                                        deleteConfirming
+                                            ? 'border-destructive text-destructive bg-destructive/10 animate-pulse'
+                                            : 'border-border hover:border-destructive hover:text-destructive',
+                                    ]"
+                                >{{ deleteConfirming ? "Sure?" : "Delete Room" }}</button>
+                            </div>
+                        </div>
                     </div>
                 </template>
             </ChatRoom>
@@ -87,6 +95,7 @@ const auth = useAuthStore();
 const roomId = route.params.roomId as string;
 const username = auth.user?.username ?? "user";
 const isCreator = ref(false);
+const showManagement = ref(false);
 const extendTTL = ref("");
 const deleteConfirming = ref(false);
 let deleteTimer: ReturnType<typeof setTimeout> | null = null;
