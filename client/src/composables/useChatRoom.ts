@@ -25,6 +25,22 @@ export type ConnectionStatus =
 const MAX_ATTEMPTS = 10;
 const MAX_DELAY = 30_000;
 
+interface ServerMessage {
+    type: string;
+    clients?: ClientInfo[];
+    remaining?: number;
+    content?: string;
+    username?: string;
+}
+
+function parseMessage(data: string): ServerMessage | null {
+    try {
+        return JSON.parse(data) as ServerMessage;
+    } catch {
+        return null;
+    }
+}
+
 export function useChatRoom(roomId: string, getUsername: () => string) {
     const messages = ref<ChatMessage[]>([]);
     const onlineUsers = ref<ClientInfo[]>([]);
@@ -69,23 +85,26 @@ export function useChatRoom(roomId: string, getUsername: () => string) {
         };
 
         ws.onmessage = ({ data }: MessageEvent) => {
-            const msg = JSON.parse(data);
+            const msg = parseMessage(data);
+            if (!msg) return;
 
             switch (msg.type) {
                 case "presence":
-                    onlineUsers.value = msg.clients;
+                    onlineUsers.value = msg.clients ?? [];
                     break;
-                case "countdown":
-                    remaining.value = msg.remaining;
-                    if (!totalRemaining.value) totalRemaining.value = msg.remaining;
+                case "countdown": {
+                    const secs = msg.remaining ?? 0;
+                    remaining.value = secs;
+                    if (!totalRemaining.value || secs > totalRemaining.value) totalRemaining.value = secs;
                     if (!countdownTimer) {
                         countdownTimer = setInterval(() => {
                             if (remaining.value > 0) remaining.value--;
                         }, 1000);
                     }
                     break;
+                }
                 case "kicked":
-                    push("system", msg.content);
+                    push("system", msg.content ?? "");
                     status.value = "kicked";
                     intentionalClose = true;
                     ws!.close();
@@ -93,15 +112,15 @@ export function useChatRoom(roomId: string, getUsername: () => string) {
                     break;
                 case "expired":
                 case "deleted":
-                    push("system", msg.content);
+                    push("system", msg.content ?? "");
                     status.value = "expired";
                     intentionalClose = true;
                     break;
                 case "system":
-                    push("system", msg.content);
+                    push("system", msg.content ?? "");
                     break;
                 default:
-                    push(msg.type, msg.content, msg.username);
+                    push(msg.type, msg.content ?? "", msg.username);
             }
         };
 

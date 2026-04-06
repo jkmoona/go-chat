@@ -10,10 +10,12 @@ RUN ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') && \
     | tar -xz -C /usr/local/bin
 
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates && \
+    adduser -D -u 1001 appuser
 WORKDIR /app
 COPY --from=builder /go-chat .
 COPY --from=builder /usr/local/bin/migrate /usr/local/bin/migrate
 COPY db ./db
+USER appuser
 EXPOSE 8080
 CMD ["./go-chat"]

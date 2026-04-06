@@ -95,6 +95,7 @@
                 ref="inputEl"
                 placeholder="type a message..."
                 autocomplete="off"
+                @focus="onInputFocus"
                 class="flex-1 bg-input border-2 border-border border-r-0 px-3 py-2 text-base focus:outline-none focus:border-primary font-mono disabled:opacity-40"
                 :disabled="connectionStatus !== 'connected'"
             />
@@ -108,7 +109,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
+import { ref, watch, nextTick, onMounted } from "vue";
 import type { ChatMessage, ClientInfo, ConnectionStatus } from "@/composables/useChatRoom";
 
 import { X } from "lucide-vue-next";
@@ -155,18 +156,15 @@ function scrollToBottom() {
     nextTick(() => bottomEl.value?.scrollIntoView({ behavior: "smooth" }));
 }
 
-function scrollToBottomInstant() {
-    nextTick(() => bottomEl.value?.scrollIntoView({ behavior: "instant" }));
+function onInputFocus() {
+    setTimeout(() => {
+        nextTick(() => bottomEl.value?.scrollIntoView({ behavior: "instant" }));
+    }, 400);
 }
 
 onMounted(() => {
-    window.visualViewport?.addEventListener("resize", scrollToBottomInstant);
     if (!window.matchMedia("(hover: none)").matches) {
         inputEl.value?.focus();
     }
-});
-
-onBeforeUnmount(() => {
-    window.visualViewport?.removeEventListener("resize", scrollToBottomInstant);
 });
 </script>
