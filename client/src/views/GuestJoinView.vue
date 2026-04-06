@@ -1,5 +1,5 @@
 <template>
-    <div class="bg-background text-foreground h-dvh flex items-center justify-center dark">
+    <div class="bg-background text-foreground h-app flex items-center justify-center dark">
 
         <!-- Join form -->
         <div v-if="!joined" class="w-full max-w-sm px-6">

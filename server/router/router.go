@@ -21,6 +21,7 @@ func securityHeaders() gin.HandlerFunc {
 		c.Header("X-Content-Type-Options", "nosniff")
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("Referrer-Policy", "same-origin")
+		c.Header("Content-Security-Policy", "default-src 'self'; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; img-src 'self' data:")
 		c.Next()
 	}
 }
@@ -49,7 +50,7 @@ func NewRouter(cfg *config.Config, userHandler *user.Handler, roomHandler *room.
 	r.POST("/refresh", userHandler.RefreshToken)
 
 	r.GET("/ws/room/:roomId", auth.OptionalAuthMiddleware(), roomHandler.GetRoom)
-	r.POST("/ws/room/:roomId/verify", roomHandler.VerifyPIN)
+	r.POST("/ws/room/:roomId/verify", authLimiter.Middleware(), roomHandler.VerifyPIN)
 	r.GET("/ws/guest/joinRoom/:roomId", authLimiter.Middleware(), wsHandler.GuestJoinRoom)
 
 	wsGroup := r.Group("/ws")

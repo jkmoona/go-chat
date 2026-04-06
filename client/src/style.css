@@ -160,3 +160,9 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .h-app {
+    height: var(--app-height, 100dvh);
+  }
+}

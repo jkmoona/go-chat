@@ -4,11 +4,11 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/jkmoona/go-chat/server/internal/auth"
 	"github.com/jkmoona/go-chat/server/internal/ws"
 )
 
@@ -51,10 +51,10 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 		return
 	}
 
-	userIDStr, _ := c.Get("userId")
-	creatorID, _ := strconv.ParseInt(userIDStr.(string), 10, 64)
+	creatorIDInt, _ := auth.GetUserIDInt(c)
+	creatorIDStr, _ := auth.GetUserID(c)
 
-	room, err := h.svc.CreateRoom(c.Request.Context(), &req, creatorID)
+	room, err := h.svc.CreateRoom(c.Request.Context(), &req, creatorIDInt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create room"})
 		return
@@ -66,7 +66,7 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 		Clients:   make(map[string]*ws.Client),
 		ExpiresAt: room.ExpiresAt,
 		HasPIN:    room.PinHash != "",
-		CreatorID: userIDStr.(string),
+		CreatorID: creatorIDStr,
 	})
 
 	c.JSON(http.StatusCreated, RoomRes{
@@ -86,10 +86,7 @@ func (h *Handler) ListRooms(c *gin.Context) {
 		return
 	}
 
-	var requesterID int64
-	if userIDStr, exists := c.Get("userId"); exists {
-		requesterID, _ = strconv.ParseInt(userIDStr.(string), 10, 64)
-	}
+	requesterID, _ := auth.GetUserIDInt(c)
 
 	res := make([]RoomRes, 0, len(rooms))
 	for _, r := range rooms {
@@ -123,12 +120,8 @@ func (h *Handler) GetRoom(c *gin.Context) {
 
 	info := h.hub.GetRoomInfo(room.ID)
 
-	var isCreator bool
-	if userIDStr, exists := c.Get("userId"); exists {
-		if requesterID, err := strconv.ParseInt(userIDStr.(string), 10, 64); err == nil {
-			isCreator = requesterID == room.CreatorID
-		}
-	}
+	requesterID, _ := auth.GetUserIDInt(c)
+	isCreator := requesterID != 0 && requesterID == room.CreatorID
 
 	c.JSON(http.StatusOK, RoomRes{
 		ID:        room.ID,
@@ -168,8 +161,7 @@ func (h *Handler) VerifyPIN(c *gin.Context) {
 
 func (h *Handler) requireCreator(c *gin.Context) (*Room, bool) {
 	roomID := c.Param("roomId")
-	userIDStr, _ := c.Get("userId")
-	requesterID, _ := strconv.ParseInt(userIDStr.(string), 10, 64)
+	requesterID, _ := auth.GetUserIDInt(c)
 
 	room, err := h.svc.GetRoom(c.Request.Context(), roomID)
 	if err != nil {
@@ -254,8 +246,8 @@ func (h *Handler) KickClient(c *gin.Context) {
 		return
 	}
 
-	userIDStr, _ := c.Get("userId")
-	if req.ClientID == userIDStr.(string) {
+	callerID, _ := auth.GetUserID(c)
+	if req.ClientID == callerID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot kick yourself"})
 		return
 	}

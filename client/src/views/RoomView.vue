@@ -1,5 +1,5 @@
 <template>
-    <div class="flex flex-col h-dvh bg-background text-foreground dark">
+    <div class="flex flex-col h-app bg-background text-foreground dark">
         <div class="flex flex-col h-full w-full max-w-2xl mx-auto px-3 py-3 sm:px-4 sm:py-4">
             <ChatRoom
                 :room-name="roomStore.currentRoom.name ?? 'Room'"

@@ -276,8 +276,13 @@ func (h *Hub) Run() {
 		case req := <-h.getClients:
 			var clients []*Client
 			if room, ok := h.rooms[req.roomID]; ok {
+				seen := make(map[string]struct{}, len(room.Clients))
 				clients = make([]*Client, 0, len(room.Clients))
 				for _, cl := range room.Clients {
+					if _, dup := seen[cl.ID]; dup {
+						continue
+					}
+					seen[cl.ID] = struct{}{}
 					clients = append(clients, cl)
 				}
 			}
