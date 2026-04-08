@@ -17,7 +17,7 @@
                             : 'border-border hover:border-primary/80',
                     ]"
                     aria-label="Toggle online users"
-                >{{ onlineUsers.length }} online</button>
+                >{{ clientCount }} online</button>
                 <slot name="header-end" />
             </div>
         </div>
@@ -63,14 +63,13 @@
         </div>
 
         <!-- Messages -->
-        <div class="flex-1 overflow-y-auto border-2 border-border p-3 mb-2 space-y-1.5 bg-card">
+        <div ref="messagesEl" class="flex-1 overflow-y-auto border-2 border-border p-3 mb-2 space-y-1.5 bg-card">
             <ChatMessageCard
                 v-for="(msg, index) in messages"
                 :key="index"
                 :message="msg"
                 :current-user="username"
             />
-            <div ref="bottomEl"></div>
         </div>
 
         <!-- Countdown -->
@@ -125,6 +124,7 @@ const props = defineProps<{
     connectionStatus: ConnectionStatus;
     formattedRemaining: string;
     username: string;
+    clientCount: number;
     isCreator?: boolean;
     currentUserId?: string;
     sendFn: (content: string) => boolean;
@@ -137,7 +137,7 @@ defineEmits<{
 
 const showUsers = ref(false);
 const newMessage = ref("");
-const bottomEl = ref<HTMLElement | null>(null);
+const messagesEl = ref<HTMLElement | null>(null);
 const inputEl = ref<HTMLInputElement | null>(null);
 
 function handleSend() {
@@ -153,12 +153,14 @@ watch(
 );
 
 function scrollToBottom() {
-    nextTick(() => bottomEl.value?.scrollIntoView({ behavior: "smooth" }));
+    nextTick(() => {
+        if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight;
+    });
 }
 
 function onInputFocus() {
     setTimeout(() => {
-        nextTick(() => bottomEl.value?.scrollIntoView({ behavior: "instant" }));
+        if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight;
     }, 400);
 }
 

@@ -44,6 +44,7 @@ function parseMessage(data: string): ServerMessage | null {
 export function useChatRoom(roomId: string, getUsername: () => string) {
     const messages = ref<ChatMessage[]>([]);
     const onlineUsers = ref<ClientInfo[]>([]);
+    const clientCount = ref(0);
     const remaining = ref(0);
     const totalRemaining = ref(0);
     const status = ref<ConnectionStatus>("idle");
@@ -91,6 +92,9 @@ export function useChatRoom(roomId: string, getUsername: () => string) {
             switch (msg.type) {
                 case "presence":
                     onlineUsers.value = msg.clients ?? [];
+                    if (clientCount.value !== onlineUsers.value.length) {
+                        clientCount.value = onlineUsers.value.length;
+                    }
                     break;
                 case "countdown": {
                     const secs = msg.remaining ?? 0;
@@ -170,8 +174,16 @@ export function useChatRoom(roomId: string, getUsername: () => string) {
         return true;
     }
 
-    function seedTotal(seconds: number) {
-        if (!totalRemaining.value) totalRemaining.value = seconds;
+    function seedRemaining(expiresAt: string, ttlSeconds: number) {
+        if (remaining.value !== 0) return;
+        const secs = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+        remaining.value = secs;
+        if (!totalRemaining.value) totalRemaining.value = ttlSeconds;
+    }
+
+    function seedOnlineCount(count: number) {
+        if (onlineUsers.value.length > 0) return;
+        clientCount.value = count;
     }
 
     function retry() {
@@ -194,6 +206,8 @@ export function useChatRoom(roomId: string, getUsername: () => string) {
         disconnect,
         send,
         retry,
-        seedTotal,
+        seedRemaining,
+        seedOnlineCount,
+        clientCount,
     };
 }

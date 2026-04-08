@@ -1,7 +1,10 @@
 <template>
-    <div class="flex flex-col h-app bg-background text-foreground dark">
+    <div class="fixed inset-0 flex flex-col bg-background text-foreground dark overflow-hidden">
         <div class="flex flex-col h-full w-full max-w-2xl mx-auto px-3 py-3 sm:px-4 sm:py-4">
-            <ChatRoom
+            <div v-if="!chatReady" class="flex-1 flex items-center justify-center">
+                <span class="text-muted-foreground font-mono text-sm">connecting...</span>
+            </div>
+            <ChatRoom v-else
                 :room-name="roomStore.currentRoom.name ?? 'Room'"
                 :messages="chat.messages.value"
                 :online-users="chat.onlineUsers.value"
@@ -10,6 +13,7 @@
                 :connection-status="chat.status.value"
                 :formatted-remaining="chat.formattedRemaining.value"
                 :username="username"
+                :client-count="chat.clientCount.value"
                 :is-creator="isCreator"
                 :current-user-id="auth.user?.id"
                 :send-fn="chat.send"
@@ -75,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useRoomStore } from "@/stores/room";
@@ -108,6 +112,7 @@ const ttlOptions = [
 ];
 
 const chat = useChatRoom(roomId, () => username);
+const chatReady = computed(() => chat.status.value !== "idle" && chat.status.value !== "connecting");
 
 watch(
     () => chat.status.value,
@@ -201,28 +206,26 @@ async function kickUser(clientId: string) {
     }
 }
 
-onMounted(async () => {
-    try {
-        const res = await apiFetch(`/ws/room/${roomId}`);
-        if (res.ok) {
-            const data = await res.json();
-            roomStore.setRoom(data.id, data.name);
-            isCreator.value = data.is_creator ?? false;
-            chat.seedTotal(data.ttl * 60);
-        }
-    } catch {
-        // room info fetch failed, proceed with chat
-    }
-
+onMounted(() => {
     const url = buildWsUrl();
-    chat.connect(url);
 
-    // clear PIN from history after capturing it in the URL
+    // clear PIN from history before async work so it's never left in state
     if (window.history.state?.pin) {
         const { pin: _, ...rest } = window.history.state;
         void _;
         history.replaceState(rest, "");
     }
+
+    chat.connect(url);
+
+    apiFetch(`/ws/room/${roomId}`).then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json();
+        roomStore.setRoom(data.id, data.name);
+        isCreator.value = data.is_creator ?? false;
+        chat.seedRemaining(data.expires_at, data.ttl * 60);
+        chat.seedOnlineCount(data.clients);
+    }).catch(() => {});
 });
 
 onBeforeUnmount(() => {

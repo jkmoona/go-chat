@@ -1,5 +1,5 @@
 <template>
-    <div class="bg-background text-foreground h-app flex items-center justify-center dark">
+    <div class="fixed inset-0 bg-background text-foreground flex items-center justify-center dark">
 
         <!-- Join form -->
         <div v-if="!joined" class="w-full max-w-sm px-6">
@@ -57,6 +57,7 @@
                 :connection-status="chat.status.value"
                 :formatted-remaining="chat.formattedRemaining.value"
                 :username="guestName"
+                :client-count="chat.clientCount.value"
                 :send-fn="chat.send"
                 :retry-fn="chat.retry"
             >
@@ -130,7 +131,8 @@ async function fetchRoom() {
             return;
         }
         room.value = await res.json();
-        chat.seedTotal(room.value!.ttl * 60);
+        chat.seedRemaining(room.value!.expires_at, room.value!.ttl * 60);
+        chat.seedOnlineCount(room.value!.clients);
     } catch {
         roomError.value = true;
         roomErrorMessage.value = "Network error. Please check your connection.";
