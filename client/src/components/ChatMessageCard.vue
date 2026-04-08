@@ -7,10 +7,10 @@
     <div
         v-else
         :class="[
-            'max-w-[78%] break-words px-2.5 py-1.5 my-1 border-2',
+            'max-w-[70%] break-words px-2.5 py-1 border-2 border-border rounded-lg',
             isOwnMessage
-                ? 'bg-user border-primary ml-auto'
-                : 'bg-other border-foreground/25 mr-auto',
+                ? 'bg-user ml-auto'
+                : 'bg-other mr-auto',
         ]"
     >
         <span v-if="!isOwnMessage" class="block text-[11px] font-black mb-0.5 opacity-70">{{ message.username }}</span>

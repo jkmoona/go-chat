@@ -12,7 +12,7 @@
                     @click="logout"
                     :loading="loading"
                     loading-text="..."
-                    class="px-3 py-1.5 text-xs font-bold border-2 border-destructive text-destructive neo-btn hover:bg-destructive hover:text-white bg-transparent"
+                    class="px-3 py-1.5 text-xs font-bold border-2 border-destructive text-destructive neo-btn bg-transparent"
                     variant="ghost"
                 >Log Out</LoadingButton>
             </div>
@@ -21,11 +21,11 @@
             <div class="mb-6 shrink-0 border-2 border-border p-4 neo-card">
                 <p class="text-xs font-black uppercase tracking-widest text-muted-foreground mb-3">New Room</p>
                 <form @submit.prevent="createRoom" class="space-y-3">
-                    <Input
+                    <input
                         v-model="newRoomName"
-                        placeholder="Room name"
+                        placeholder="room name"
                         required
-                        class="border-2 border-border focus:border-primary"
+                        class="w-full bg-input border-2 border-border px-3 py-2 text-base focus:outline-none focus:border-primary font-mono"
                     />
                     <!-- TTL pills -->
                     <div class="flex flex-wrap gap-1.5">
@@ -38,7 +38,7 @@
                                 'px-2.5 py-1 text-xs font-bold border-2 neo-btn',
                                 newRoomTTL === opt.value
                                     ? 'bg-primary text-primary-foreground border-primary'
-                                    : 'border-border hover:border-primary/80',
+                                    : 'border-border',
                             ]"
                         >{{ opt.label }}</button>
                     </div>
@@ -51,7 +51,7 @@
                                 'px-2.5 py-1 text-xs font-bold border-2 neo-btn',
                                 enablePIN
                                     ? 'bg-primary text-primary-foreground border-primary'
-                                    : 'border-border hover:border-primary/80',
+                                    : 'border-border',
                             ]"
                         >PIN lock</button>
                         <template v-if="enablePIN">
@@ -67,7 +67,7 @@
             </div>
 
             <!-- Rooms -->
-            <div class="flex-1 min-h-0 flex flex-col border-2 border-border">
+            <div class="flex-1 min-h-0 flex flex-col border-2 border-border neo-card">
                 <div class="shrink-0 px-4 pt-3 pb-2 border-b-2 border-border">
                     <p class="text-xs font-black uppercase tracking-widest text-muted-foreground">Active Rooms</p>
                 </div>
@@ -94,7 +94,7 @@
                                 <div class="flex items-center gap-1.5 shrink-0">
                                     <button
                                         @click="copyLink(room.id)"
-                                        class="px-2 py-1 text-xs font-bold border-2 border-border neo-btn hover:border-primary/80"
+                                        class="px-2 py-1 text-xs font-bold border-2 border-border neo-btn "
                                         aria-label="Copy room link"
                                     ><Link2 class="size-3" /></button>
                                     <button
@@ -116,13 +116,13 @@
                                             'px-2 py-0.5 text-[11px] font-bold border-2 neo-btn',
                                             extendSelections[room.id] === opt.value
                                                 ? 'bg-primary text-primary-foreground border-primary'
-                                                : 'border-border hover:border-primary/80',
+                                                : 'border-border ',
                                         ]"
                                     >{{ opt.label }}</button>
                                     <button
                                         :disabled="!extendSelections[room.id]"
                                         @click="extendRoom(room)"
-                                        class="px-2 py-0.5 text-[11px] font-bold border-2 border-border neo-btn hover:bg-primary hover:text-primary-foreground hover:border-primary disabled:opacity-30 disabled:cursor-not-allowed"
+                                        class="px-2 py-0.5 text-[11px] font-bold border-2 border-border neo-btn disabled:opacity-30 disabled:cursor-not-allowed"
                                     >Extend</button>
                                 </div>
                                 <div class="flex justify-end">
@@ -132,7 +132,7 @@
                                             'px-2 py-0.5 text-[11px] font-bold border-2 neo-btn',
                                             deleteConfirming[room.id]
                                                 ? 'border-destructive text-destructive bg-destructive/10 animate-pulse'
-                                                : 'border-border hover:border-destructive hover:text-destructive',
+                                                : 'border-border',
                                         ]"
                                     >{{ deleteConfirming[room.id] ? "Sure?" : "Delete" }}</button>
                                 </div>
@@ -160,7 +160,7 @@
                             <div class="flex items-center gap-1.5 shrink-0">
                                 <button
                                     @click="copyLink(room.id)"
-                                    class="px-2 py-1 text-xs font-bold border-2 border-border neo-btn hover:border-primary/80"
+                                    class="px-2 py-1 text-xs font-bold border-2 border-border neo-btn "
                                     aria-label="Copy room link"
                                 ><Link2 class="size-3" /></button>
                                 <button
@@ -173,7 +173,7 @@
                         <div v-if="pinTarget === room.id" class="mt-3 pt-3 border-t-2 border-border flex gap-2 items-center flex-wrap">
                             <PinInput v-model="enteredPIN" @complete="confirmJoin(room)" @update:model-value="pinErrors[room.id] = ''" />
                             <button @click="confirmJoin(room)" class="px-3 py-1 text-xs font-black bg-primary text-primary-foreground border-2 border-primary neo-btn">Go</button>
-                            <button @click="pinTarget = null" class="px-2 py-1 text-xs font-bold border-2 border-border neo-btn hover:border-destructive hover:text-destructive">✕</button>
+                            <button @click="pinTarget = null" class="px-2 py-1 text-xs font-bold border-2 border-border neo-btn">✕</button>
                             <p v-if="pinErrors[room.id]" class="text-xs text-destructive font-mono w-full">{{ pinErrors[room.id] }}</p>
                         </div>
                     </div>
@@ -197,9 +197,9 @@ import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { apiFetch } from "@/services/api";
 import { parseApiError } from "@/utils/parseError";
+import { copyToClipboard } from "@/utils/clipboard";
 import { useRoomStore, type Room } from "@/stores/room";
 
-import { Input } from "@/components/ui/input";
 import { toast } from "vue-sonner";
 import { Link2 } from "lucide-vue-next";
 import LoadingButton from "@/components/LoadingButton.vue";
@@ -295,15 +295,11 @@ async function createRoom() {
         enablePIN.value = false;
         pinError.value = "";
 
-        try {
-            await navigator.clipboard.writeText(`${window.location.origin}/join/${room.id}`);
-            toast.success(`Room "${room.name}" created`, {
-                description: "Link copied to clipboard",
-                duration: 3000,
-            });
-        } catch {
-            toast.success(`Room "${room.name}" created`);
-        }
+        const copied = await copyToClipboard(`${window.location.origin}/join/${room.id}`);
+        toast.success(`Room "${room.name}" created`, {
+            description: copied ? "Link copied to clipboard" : undefined,
+            duration: 3000,
+        });
         fetchRooms();
     } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : "Failed to create room");
@@ -395,11 +391,11 @@ async function deleteRoom(room: Room) {
 }
 
 async function copyLink(roomId: string) {
-    try {
-        await navigator.clipboard.writeText(`${window.location.origin}/join/${roomId}`);
+    const link = `${window.location.origin}/join/${roomId}`;
+    if (await copyToClipboard(link)) {
         toast.success("Link copied");
-    } catch {
-        toast.error("Failed to copy link");
+    } else {
+        toast.info(link, { description: "Copy this link manually" });
     }
 }
 

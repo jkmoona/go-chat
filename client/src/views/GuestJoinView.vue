@@ -64,7 +64,7 @@
                 <template #header-end>
                     <button
                         @click="leaveRoom"
-                        class="px-2 py-1 text-xs font-bold border-2 border-destructive text-destructive neo-btn hover:bg-destructive hover:text-white"
+                        class="px-2 py-1 text-xs font-bold border-2 border-destructive text-destructive neo-btn"
                     >Leave</button>
                 </template>
             </ChatRoom>

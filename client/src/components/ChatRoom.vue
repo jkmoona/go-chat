@@ -14,7 +14,7 @@
                         'px-2 py-1 text-xs font-bold border-2 neo-btn',
                         showUsers
                             ? 'bg-primary text-primary-foreground border-primary'
-                            : 'border-border hover:border-primary/80',
+                            : 'border-border',
                     ]"
                     aria-label="Toggle online users"
                 >{{ clientCount }} online</button>
@@ -27,7 +27,7 @@
         <!-- Connection status -->
         <div
             v-if="connectionStatus === 'connecting' && onlineUsers.length > 0"
-            class="mb-2 shrink-0 border-l-4 border-yellow-500 pl-2 py-0.5 text-xs text-yellow-500 font-mono"
+            class="mb-2 shrink-0 border-l-4 border-primary/70 pl-2 py-0.5 text-xs text-primary/70 font-mono"
         >reconnecting...</div>
         <div
             v-else-if="connectionStatus === 'disconnected'"
@@ -36,7 +36,7 @@
             connection lost
             <button
                 @click="retryFn"
-                class="font-bold border border-destructive px-1.5 py-0.5 hover:bg-destructive hover:text-white neo-btn text-[10px]"
+                class="font-bold border border-destructive px-1.5 py-0.5 neo-btn text-[10px]"
             >retry</button>
         </div>
 
@@ -63,7 +63,7 @@
         </div>
 
         <!-- Messages -->
-        <div ref="messagesEl" class="flex-1 overflow-y-auto border-2 border-border p-3 mb-2 space-y-1.5 bg-card">
+        <div ref="messagesEl" class="flex-1 overflow-y-auto border-2 border-border p-3 mb-2 space-y-2 bg-card">
             <ChatMessageCard
                 v-for="(msg, index) in messages"
                 :key="index"
@@ -88,20 +88,20 @@
         </div>
 
         <!-- Input -->
-        <form @submit.prevent="handleSend" class="flex gap-0 shrink-0">
+        <form @submit.prevent="handleSend" class="flex shrink-0 border-2 border-border rounded-md overflow-hidden focus-within:border-primary transition-colors">
             <input
                 v-model="newMessage"
                 ref="inputEl"
                 placeholder="type a message..."
                 autocomplete="off"
                 @focus="onInputFocus"
-                class="flex-1 bg-input border-2 border-border border-r-0 px-3 py-2 text-base focus:outline-none focus:border-primary font-mono disabled:opacity-40"
+                class="flex-1 bg-input px-3 py-2 text-base focus:outline-none font-mono disabled:opacity-40 border-0 !rounded-none"
                 :disabled="connectionStatus !== 'connected'"
             />
             <button
                 type="submit"
                 :disabled="!newMessage.trim() || connectionStatus !== 'connected'"
-                class="px-4 py-2 text-sm font-black bg-primary text-primary-foreground border-2 border-primary neo-btn disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                class="px-4 py-2 text-sm font-black bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
             >↑</button>
         </form>
     </div>

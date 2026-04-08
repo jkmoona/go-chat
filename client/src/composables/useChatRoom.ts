@@ -175,10 +175,10 @@ export function useChatRoom(roomId: string, getUsername: () => string) {
     }
 
     function seedRemaining(expiresAt: string, ttlSeconds: number) {
+        totalRemaining.value = ttlSeconds;
         if (remaining.value !== 0) return;
         const secs = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
         remaining.value = secs;
-        if (!totalRemaining.value) totalRemaining.value = ttlSeconds;
     }
 
     function seedOnlineCount(count: number) {
