@@ -149,7 +149,7 @@ function buildWsUrl(): string {
 async function copyLink() {
     const link = `${window.location.origin}/join/${roomId}`;
     if (await copyToClipboard(link)) {
-        toast.success("Link copied");
+        toast.success("Link copied", { duration: 3000 });
     } else {
         toast.info(link, { description: "Copy this link manually" });
     }

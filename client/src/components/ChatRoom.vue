@@ -90,7 +90,9 @@
         <!-- Input -->
         <form @submit.prevent="handleSend" class="flex shrink-0 border-2 border-border rounded-md overflow-hidden focus-within:border-primary transition-colors">
             <input
-                v-model="newMessage"
+                :value="newMessage"
+                @input="newMessage = ($event.target as HTMLInputElement).value"
+                @compositionend="newMessage = ($event.target as HTMLInputElement).value"
                 ref="inputEl"
                 placeholder="type a message..."
                 autocomplete="off"
