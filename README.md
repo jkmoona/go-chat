@@ -10,14 +10,14 @@ Live: [tempchatgo.up.railway.app](https://tempchatgo.up.railway.app)
 
 | | |
 | --- | --- |
-| Backend | Go 1.23, Gin, gorilla/websocket |
+| Backend | Go 1.24, Chi, gorilla/websocket |
 | Database | PostgreSQL 15 |
 | Auth | JWT (access + refresh tokens), bcrypt |
 | Frontend | Vue 3, TypeScript, Tailwind CSS |
 | Infra | Docker, Caddy, Railway |
 | CI | GitHub Actions |
 
-Room metadata lives in Postgres. Messages live only in memory and are broadcast over WebSocket — nothing is persisted.
+Room metadata lives in Postgres. Messages live only in memory and are broadcast over WebSocket. Nothing is persisted.
 
 ## Features
 
