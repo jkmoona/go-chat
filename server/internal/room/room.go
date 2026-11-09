@@ -17,9 +17,9 @@ type Room struct {
 }
 
 type CreateRoomReq struct {
-	Name string `json:"name" binding:"required,min=1,max=100"`
-	TTL  int    `json:"ttl" binding:"required,oneof=15 30 60 360 1440"`
-	PIN  string `json:"pin,omitempty" binding:"omitempty,numeric,len=4"`
+	Name string `json:"name" validate:"required,min=1,max=100"`
+	TTL  int    `json:"ttl" validate:"required,oneof=15 30 60 360 1440"`
+	PIN  string `json:"pin,omitempty" validate:"omitempty,numeric,len=4"`
 }
 
 type RoomRes struct {
@@ -33,15 +33,15 @@ type RoomRes struct {
 }
 
 type ExtendTTLReq struct {
-	TTL int `json:"ttl" binding:"required,oneof=15 30 60 360"`
+	TTL int `json:"ttl" validate:"required,oneof=15 30 60 360"`
 }
 
 type KickReq struct {
-	ClientID string `json:"client_id" binding:"required"`
+	ClientID string `json:"client_id" validate:"required"`
 }
 
 type VerifyPINReq struct {
-	PIN string `json:"pin" binding:"required"`
+	PIN string `json:"pin" validate:"required"`
 }
 
 type Repository interface {
