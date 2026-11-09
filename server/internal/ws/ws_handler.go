@@ -64,7 +64,6 @@ func (h *Handler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		httputil.ErrorJSON(w, http.StatusBadRequest, "connection upgrade failed")
 		return
 	}
 	username, ok := auth.GetUsername(r.Context())
@@ -144,7 +143,6 @@ func (h *Handler) GuestJoinRoom(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		httputil.ErrorJSON(w, http.StatusBadRequest, "connection upgrade failed")
 		return
 	}
 

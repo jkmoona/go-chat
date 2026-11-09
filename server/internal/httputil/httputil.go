@@ -3,6 +3,7 @@ package httputil
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -14,7 +15,9 @@ var validate = validator.New()
 func WriteJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		slog.Error("json encode failed", slog.String("error", err.Error()))
+	}
 }
 
 func ErrorJSON(w http.ResponseWriter, status int, msg string) {
