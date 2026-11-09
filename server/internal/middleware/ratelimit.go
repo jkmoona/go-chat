@@ -1,11 +1,12 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
 	"sync"
 	"time"
 
-	"github.com/gin-gonic/gin"
+	"github.com/jkmoona/go-chat/server/internal/httputil"
 )
 
 type visitor struct {
@@ -43,6 +44,14 @@ func NewRateLimiter(rate float64, burst int) *RateLimiter {
 	return rl
 }
 
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
 func (rl *RateLimiter) allow(ip string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -68,14 +77,12 @@ func (rl *RateLimiter) allow(ip string) bool {
 	return true
 }
 
-func (rl *RateLimiter) Middleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if !rl.allow(c.ClientIP()) {
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error": "too many requests, please try again later",
-			})
+func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !rl.allow(clientIP(r)) {
+			httputil.ErrorJSON(w, http.StatusTooManyRequests, "too many requests, please try again later")
 			return
 		}
-		c.Next()
-	}
+		next.ServeHTTP(w, r)
+	})
 }
