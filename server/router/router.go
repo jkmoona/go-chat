@@ -31,7 +31,7 @@ func securityHeaders(next http.Handler) http.Handler {
 func NewRouter(cfg *config.Config, userHandler *user.Handler, roomHandler *room.Handler, wsHandler *ws.Handler) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(chimiddleware.Recoverer)
-	r.Use(chimiddleware.RealIP)
+	r.Use(chimiddleware.ClientIPFromXFFTrustedProxies(1))
 	r.Use(middleware.RequestLogger(slog.Default()))
 	r.Use(securityHeaders)
 

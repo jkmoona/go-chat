@@ -20,7 +20,9 @@ import (
 )
 
 func init() {
-	auth.Setup("test-access", "test-refresh", false)
+	if err := auth.Setup("test-access", "test-refresh", false); err != nil {
+		panic(err)
+	}
 }
 
 // --- mock user service ---
@@ -576,7 +578,9 @@ func TestListRooms(t *testing.T) {
 	}
 
 	var rooms []map[string]any
-	json.NewDecoder(w.Body).Decode(&rooms)
+	if err := json.NewDecoder(w.Body).Decode(&rooms); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 	if len(rooms) != 2 {
 		t.Fatalf("room count = %d, want 2", len(rooms))
 	}
@@ -679,7 +683,9 @@ func TestKickClientHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	var clients []map[string]any
-	json.NewDecoder(w.Body).Decode(&clients)
+	if err := json.NewDecoder(w.Body).Decode(&clients); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 
 	if len(clients) == 0 {
 		t.Fatal("no clients in room")
@@ -761,7 +767,9 @@ func TestWebSocketAuthenticatedJoin(t *testing.T) {
 	}
 	defer conn.Close()
 
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("set deadline: %v", err)
+	}
 	var msg map[string]any
 	if err := conn.ReadJSON(&msg); err != nil {
 		t.Fatalf("read: %v", err)
@@ -789,7 +797,9 @@ func TestWebSocketGuestJoin(t *testing.T) {
 	}
 	defer conn.Close()
 
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("set deadline: %v", err)
+	}
 	var msg map[string]any
 	if err := conn.ReadJSON(&msg); err != nil {
 		t.Fatalf("read: %v", err)
@@ -890,7 +900,9 @@ func TestWebSocketBroadcast(t *testing.T) {
 
 	time.Sleep(300 * time.Millisecond)
 
-	conn2.WriteJSON(map[string]string{"content": "test broadcast"})
+	if err := conn2.WriteJSON(map[string]string{"content": "test broadcast"}); err != nil {
+		t.Fatalf("write: %v", err)
+	}
 
 	deadline := time.After(3 * time.Second)
 	for {

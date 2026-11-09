@@ -23,7 +23,9 @@ func TestWriteJSON(t *testing.T) {
 	}
 
 	var got map[string]string
-	json.NewDecoder(w.Body).Decode(&got)
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 	if got["key"] != "value" {
 		t.Fatalf("body key = %q, want %q", got["key"], "value")
 	}
@@ -34,7 +36,9 @@ func TestErrorJSON(t *testing.T) {
 	ErrorJSON(w, http.StatusBadRequest, "bad input")
 
 	var got map[string]string
-	json.NewDecoder(w.Body).Decode(&got)
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 	if got["error"] != "bad input" {
 		t.Fatalf("error = %q, want %q", got["error"], "bad input")
 	}
@@ -45,7 +49,9 @@ func TestMsgJSON(t *testing.T) {
 	MsgJSON(w, http.StatusOK, "message", "done")
 
 	var got map[string]string
-	json.NewDecoder(w.Body).Decode(&got)
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 	if got["message"] != "done" {
 		t.Fatalf("message = %q, want %q", got["message"], "done")
 	}

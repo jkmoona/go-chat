@@ -9,7 +9,9 @@ import (
 )
 
 func init() {
-	Setup("test-access-secret", "test-refresh-secret", false)
+	if err := Setup("test-access-secret", "test-refresh-secret", false); err != nil {
+		panic(err)
+	}
 }
 
 func TestAuthMiddlewareRejectsNoToken(t *testing.T) {
@@ -26,7 +28,9 @@ func TestAuthMiddlewareRejectsNoToken(t *testing.T) {
 	}
 
 	var body map[string]string
-	json.NewDecoder(w.Body).Decode(&body)
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 	if body["error"] != "authentication required" {
 		t.Fatalf("error = %q, want %q", body["error"], "authentication required")
 	}

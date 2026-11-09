@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jkmoona/go-chat/server/internal/httputil"
 )
 
@@ -79,7 +80,11 @@ func (rl *RateLimiter) allow(ip string) bool {
 
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !rl.allow(clientIP(r)) {
+		ip := chimiddleware.GetClientIP(r.Context())
+		if ip == "" {
+			ip = clientIP(r)
+		}
+		if !rl.allow(ip) {
 			httputil.ErrorJSON(w, http.StatusTooManyRequests, "too many requests, please try again later")
 			return
 		}
