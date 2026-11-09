@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/websocket"
 	"github.com/jkmoona/go-chat/server/internal/auth"
 	"github.com/jkmoona/go-chat/server/internal/config"
 	"github.com/jkmoona/go-chat/server/internal/room"
@@ -40,7 +42,7 @@ func (m *mockUserService) CreateUser(_ context.Context, req *user.CreateUserReq)
 	u := &user.User{ID: m.nextID, Username: req.Username, Password: hashed}
 	m.users[req.Username] = u
 	m.nextID++
-	return &user.CreateUserRes{ID: "1", Username: u.Username}, nil
+	return &user.CreateUserRes{ID: strconv.FormatInt(u.ID, 10), Username: u.Username}, nil
 }
 
 func (m *mockUserService) Login(_ context.Context, req *user.LoginUserReq) (*user.LoginUserRes, error) {
@@ -53,13 +55,14 @@ func (m *mockUserService) Login(_ context.Context, req *user.LoginUserReq) (*use
 	}
 	at, _ := auth.GenerateAccessToken(u.ID, u.Username, 15*time.Minute)
 	rt, _ := auth.GenerateRefreshToken(u.ID, u.Username, 24*time.Hour)
-	return &user.LoginUserRes{AccessToken: at, RefreshToken: rt, ID: "1", Username: u.Username}, nil
+	return &user.LoginUserRes{AccessToken: at, RefreshToken: rt, ID: strconv.FormatInt(u.ID, 10), Username: u.Username}, nil
 }
 
 // --- mock room service ---
 
 type mockRoomService struct {
-	rooms map[string]*room.Room
+	rooms  map[string]*room.Room
+	nextID int
 }
 
 func newMockRoomService() *mockRoomService {
@@ -68,8 +71,9 @@ func newMockRoomService() *mockRoomService {
 
 func (m *mockRoomService) CreateRoom(_ context.Context, req *room.CreateRoomReq, creatorID int64) (*room.Room, error) {
 	now := time.Now()
+	m.nextID++
 	r := &room.Room{
-		ID: "abc123", Name: req.Name, CreatorID: creatorID, TTL: req.TTL,
+		ID: "room" + strconv.Itoa(m.nextID), Name: req.Name, CreatorID: creatorID, TTL: req.TTL,
 		CreatedAt: now, ExpiresAt: now.Add(time.Duration(req.TTL) * time.Minute), IsActive: true,
 	}
 	m.rooms[r.ID] = r
@@ -402,7 +406,7 @@ func TestGetRoomNotFound(t *testing.T) {
 }
 
 func TestGetRoomPublicAccess(t *testing.T) {
-	r, _, roomSvc := setupRouter(t)
+	r, _, _ := setupRouter(t)
 	cookies := registerAndLogin(t, r)
 
 	req := authedRequest(http.MethodPost, "/ws/createRoom", `{"name":"public-test","ttl":15}`, cookies)
@@ -410,8 +414,6 @@ func TestGetRoomPublicAccess(t *testing.T) {
 	r.ServeHTTP(w, req)
 	body := decodeBody(t, w)
 	roomID := body["id"].(string)
-
-	roomSvc.rooms[roomID] = roomSvc.rooms[roomID]
 
 	req = httptest.NewRequest(http.MethodGet, "/ws/room/"+roomID, nil)
 	w = httptest.NewRecorder()
@@ -454,15 +456,13 @@ func TestVerifyPIN(t *testing.T) {
 }
 
 func TestDeleteRoomRequiresCreator(t *testing.T) {
-	r, userSvc, roomSvc := setupRouter(t)
+	r, _, roomSvc := setupRouter(t)
 	cookies := registerAndLogin(t, r)
 
 	roomSvc.rooms["other"] = &room.Room{
 		ID: "other", Name: "other room", CreatorID: 999, TTL: 15,
 		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(15 * time.Minute),
 	}
-
-	_ = userSvc
 
 	req := authedRequest(http.MethodDelete, "/ws/room/other", "", cookies)
 	w := httptest.NewRecorder()
@@ -516,5 +516,421 @@ func TestRefreshTokenMissing(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestLoginNonexistentUser(t *testing.T) {
+	r, _, _ := setupRouter(t)
+
+	body := `{"username":"nobody","password":"secret123"}`
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestRefreshTokenInvalid(t *testing.T) {
+	r, _, _ := setupRouter(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: "garbage"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+// --- room management tests ---
+
+func createRoomAsUser(t *testing.T, r http.Handler, cookies []*http.Cookie, body string) string {
+	t.Helper()
+	req := authedRequest(http.MethodPost, "/ws/createRoom", body, cookies)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create room: status = %d, body = %s", w.Code, w.Body.String())
+	}
+	m := decodeBody(t, w)
+	return m["id"].(string)
+}
+
+func TestListRooms(t *testing.T) {
+	r, _, _ := setupRouter(t)
+	cookies := registerAndLogin(t, r)
+
+	createRoomAsUser(t, r, cookies, `{"name":"room-a","ttl":15}`)
+	createRoomAsUser(t, r, cookies, `{"name":"room-b","ttl":30}`)
+
+	req := authedRequest(http.MethodGet, "/ws/getRooms", "", cookies)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var rooms []map[string]any
+	json.NewDecoder(w.Body).Decode(&rooms)
+	if len(rooms) != 2 {
+		t.Fatalf("room count = %d, want 2", len(rooms))
+	}
+
+	for _, rm := range rooms {
+		if rm["is_creator"] != true {
+			t.Fatalf("is_creator = %v, want true", rm["is_creator"])
+		}
+	}
+}
+
+func TestExtendTTL(t *testing.T) {
+	r, _, _ := setupRouter(t)
+	cookies := registerAndLogin(t, r)
+	roomID := createRoomAsUser(t, r, cookies, `{"name":"extend-test","ttl":15}`)
+
+	req := authedRequest(http.MethodPatch, "/ws/room/"+roomID, `{"ttl":30}`, cookies)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body = %s", w.Code, http.StatusOK, w.Body.String())
+	}
+	body := decodeBody(t, w)
+	if body["id"] != roomID {
+		t.Fatalf("id = %q, want %q", body["id"], roomID)
+	}
+}
+
+func TestExtendTTLInvalidValue(t *testing.T) {
+	r, _, _ := setupRouter(t)
+	cookies := registerAndLogin(t, r)
+	roomID := createRoomAsUser(t, r, cookies, `{"name":"extend-invalid","ttl":15}`)
+
+	req := authedRequest(http.MethodPatch, "/ws/room/"+roomID, `{"ttl":999}`, cookies)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestExtendTTLRequiresCreator(t *testing.T) {
+	r, _, roomSvc := setupRouter(t)
+	cookies := registerAndLogin(t, r)
+
+	roomSvc.rooms["foreign"] = &room.Room{
+		ID: "foreign", Name: "foreign", CreatorID: 999, TTL: 15,
+		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(15 * time.Minute),
+	}
+
+	req := authedRequest(http.MethodPatch, "/ws/room/foreign", `{"ttl":30}`, cookies)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestDeleteRoomHappyPath(t *testing.T) {
+	r, _, _ := setupRouter(t)
+	cookies := registerAndLogin(t, r)
+	roomID := createRoomAsUser(t, r, cookies, `{"name":"delete-me","ttl":15}`)
+
+	req := authedRequest(http.MethodDelete, "/ws/room/"+roomID, "", cookies)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := decodeBody(t, w)
+	if body["message"] != "room deleted" {
+		t.Fatalf("message = %q, want %q", body["message"], "room deleted")
+	}
+}
+
+func TestKickClientHappyPath(t *testing.T) {
+	r, _, _ := setupRouter(t)
+	cookies := registerAndLogin(t, r)
+	roomID := createRoomAsUser(t, r, cookies, `{"name":"kick-test","ttl":15}`)
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/guest/joinRoom/" + roomID + "?name=victim"
+	header := http.Header{}
+	header.Set("Origin", "http://localhost:5173")
+	guestConn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err != nil {
+		t.Fatalf("guest dial: %v", err)
+	}
+	defer guestConn.Close()
+
+	time.Sleep(200 * time.Millisecond)
+
+	req := authedRequest(http.MethodGet, "/ws/getClients/"+roomID, "", cookies)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	var clients []map[string]any
+	json.NewDecoder(w.Body).Decode(&clients)
+
+	if len(clients) == 0 {
+		t.Fatal("no clients in room")
+	}
+	guestID := clients[0]["id"].(string)
+
+	kickBody := `{"client_id":"` + guestID + `"}`
+	req = authedRequest(http.MethodPost, "/ws/room/"+roomID+"/kick", kickBody, cookies)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("kick: status = %d, want %d, body = %s", w.Code, http.StatusOK, w.Body.String())
+	}
+}
+
+func TestKickSelfPrevented(t *testing.T) {
+	r, _, _ := setupRouter(t)
+	cookies := registerAndLogin(t, r)
+	roomID := createRoomAsUser(t, r, cookies, `{"name":"self-kick","ttl":15}`)
+
+	kickBody := `{"client_id":"1"}`
+	req := authedRequest(http.MethodPost, "/ws/room/"+roomID+"/kick", kickBody, cookies)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+	body := decodeBody(t, w)
+	if body["error"] != "cannot kick yourself" {
+		t.Fatalf("error = %q, want %q", body["error"], "cannot kick yourself")
+	}
+}
+
+func TestKickRequiresCreator(t *testing.T) {
+	r, _, roomSvc := setupRouter(t)
+	cookies := registerAndLogin(t, r)
+
+	roomSvc.rooms["notmine"] = &room.Room{
+		ID: "notmine", Name: "not mine", CreatorID: 999, TTL: 15,
+		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(15 * time.Minute),
+	}
+
+	req := authedRequest(http.MethodPost, "/ws/room/notmine/kick", `{"client_id":"someone"}`, cookies)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+// --- WebSocket tests ---
+
+func TestWebSocketAuthenticatedJoin(t *testing.T) {
+	r, _, _ := setupRouter(t)
+	cookies := registerAndLogin(t, r)
+	roomID := createRoomAsUser(t, r, cookies, `{"name":"ws-auth","ttl":15}`)
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/joinRoom/" + roomID
+	header := http.Header{}
+	header.Set("Origin", "http://localhost:5173")
+	cookieStr := ""
+	for _, c := range cookies {
+		if cookieStr != "" {
+			cookieStr += "; "
+		}
+		cookieStr += c.Name + "=" + c.Value
+	}
+	header.Set("Cookie", cookieStr)
+
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err != nil {
+		t.Fatalf("dial: %v (status %d)", err, resp.StatusCode)
+	}
+	defer conn.Close()
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var msg map[string]any
+	if err := conn.ReadJSON(&msg); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if msg["type"] != "presence" {
+		t.Fatalf("first message type = %q, want %q", msg["type"], "presence")
+	}
+}
+
+func TestWebSocketGuestJoin(t *testing.T) {
+	r, _, _ := setupRouter(t)
+	cookies := registerAndLogin(t, r)
+	roomID := createRoomAsUser(t, r, cookies, `{"name":"ws-guest","ttl":15}`)
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/guest/joinRoom/" + roomID + "?name=guestuser"
+	header := http.Header{}
+	header.Set("Origin", "http://localhost:5173")
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var msg map[string]any
+	if err := conn.ReadJSON(&msg); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if msg["type"] != "presence" {
+		t.Fatalf("first message type = %q, want %q", msg["type"], "presence")
+	}
+}
+
+func TestWebSocketGuestJoinBadName(t *testing.T) {
+	r, _, _ := setupRouter(t)
+	cookies := registerAndLogin(t, r)
+	roomID := createRoomAsUser(t, r, cookies, `{"name":"ws-badname","ttl":15}`)
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/guest/joinRoom/" + roomID + "?name="
+	header := http.Header{}
+	header.Set("Origin", "http://localhost:5173")
+
+	_, resp, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err == nil {
+		t.Fatal("expected dial to fail for empty name")
+	}
+	if resp != nil && resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+}
+
+func TestWebSocketGuestJoinMissingRoom(t *testing.T) {
+	r, _, _ := setupRouter(t)
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/guest/joinRoom/nonexistent?name=guest"
+	header := http.Header{}
+	header.Set("Origin", "http://localhost:5173")
+
+	_, resp, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err == nil {
+		t.Fatal("expected dial to fail for missing room")
+	}
+	if resp != nil && resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestWebSocketBroadcast(t *testing.T) {
+	r, _, _ := setupRouter(t)
+	cookies := registerAndLogin(t, r)
+	roomID := createRoomAsUser(t, r, cookies, `{"name":"ws-broadcast","ttl":15}`)
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/joinRoom/" + roomID
+	header := http.Header{}
+	header.Set("Origin", "http://localhost:5173")
+	cookieStr := ""
+	for _, c := range cookies {
+		if cookieStr != "" {
+			cookieStr += "; "
+		}
+		cookieStr += c.Name + "=" + c.Value
+	}
+	header.Set("Cookie", cookieStr)
+
+	conn1, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err != nil {
+		t.Fatalf("conn1 dial: %v", err)
+	}
+	defer conn1.Close()
+
+	messages := make(chan map[string]any, 20)
+	go func() {
+		for {
+			var msg map[string]any
+			if err := conn1.ReadJSON(&msg); err != nil {
+				close(messages)
+				return
+			}
+			messages <- msg
+		}
+	}()
+
+	time.Sleep(300 * time.Millisecond)
+
+	guestURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/guest/joinRoom/" + roomID + "?name=sender"
+	guestHeader := http.Header{}
+	guestHeader.Set("Origin", "http://localhost:5173")
+	conn2, _, err := websocket.DefaultDialer.Dial(guestURL, guestHeader)
+	if err != nil {
+		t.Fatalf("conn2 dial: %v", err)
+	}
+	defer conn2.Close()
+
+	time.Sleep(300 * time.Millisecond)
+
+	conn2.WriteJSON(map[string]string{"content": "test broadcast"})
+
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case msg, ok := <-messages:
+			if !ok {
+				t.Fatal("connection closed before receiving chat message")
+			}
+			if msg["type"] == "chat" {
+				if msg["content"] != "test broadcast" {
+					t.Fatalf("content = %q, want %q", msg["content"], "test broadcast")
+				}
+				if msg["username"] != "sender" {
+					t.Fatalf("username = %q, want %q", msg["username"], "sender")
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for broadcast message")
+		}
+	}
+}
+
+func TestWebSocketJoinWithoutAuth(t *testing.T) {
+	r, _, _ := setupRouter(t)
+	cookies := registerAndLogin(t, r)
+	roomID := createRoomAsUser(t, r, cookies, `{"name":"ws-noauth","ttl":15}`)
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/joinRoom/" + roomID
+	header := http.Header{}
+	header.Set("Origin", "http://localhost:5173")
+
+	_, resp, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err == nil {
+		t.Fatal("expected dial to fail without auth")
+	}
+	if resp != nil && resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
 	}
 }
