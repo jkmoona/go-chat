@@ -4,32 +4,11 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
 	"github.com/jkmoona/go-chat/server/internal/auth"
+	"github.com/jkmoona/go-chat/server/internal/httputil"
 )
-
-func bindingError(err error) string {
-	var ve validator.ValidationErrors
-	if errors.As(err, &ve) {
-		e := ve[0]
-		field := strings.ToLower(e.Field())
-		switch e.Tag() {
-		case "required":
-			return field + " is required"
-		case "min":
-			return field + " must be at least " + e.Param() + " characters"
-		case "max":
-			return field + " must be at most " + e.Param() + " characters"
-		case "alphanum":
-			return field + " must contain only letters and numbers"
-		}
-	}
-	return "invalid request"
-}
 
 type Handler struct {
 	Service
@@ -41,75 +20,73 @@ func NewHandler(s Service) *Handler {
 	}
 }
 
-func (h *Handler) CreateUser(c *gin.Context) {
+func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var u CreateUserReq
-	if err := c.ShouldBindJSON(&u); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindingError(err)})
+	if err := httputil.DecodeAndValidate(r, &u); err != nil {
+		httputil.ErrorJSON(w, http.StatusBadRequest, httputil.BindingError(err))
 		return
 	}
 
-	res, err := h.Service.CreateUser(c.Request.Context(), &u)
+	res, err := h.Service.CreateUser(r.Context(), &u)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrUsernameTaken):
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			httputil.ErrorJSON(w, http.StatusConflict, err.Error())
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+			httputil.ErrorJSON(w, http.StatusInternalServerError, "Failed to create user")
 		}
 		return
 	}
 
-	c.JSON(http.StatusCreated, res)
+	httputil.WriteJSON(w, http.StatusCreated, res)
 }
 
-func (h *Handler) Login(c *gin.Context) {
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var user LoginUserReq
-	if err := c.ShouldBindJSON(&user); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindingError(err)})
+	if err := httputil.DecodeAndValidate(r, &user); err != nil {
+		httputil.ErrorJSON(w, http.StatusBadRequest, httputil.BindingError(err))
 		return
 	}
 
-	u, err := h.Service.Login(c.Request.Context(), &user)
+	u, err := h.Service.Login(r.Context(), &user)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidCredentials):
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			httputil.ErrorJSON(w, http.StatusUnauthorized, err.Error())
 		case errors.Is(err, ErrTokenGeneration):
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Authentication failed"})
+			httputil.ErrorJSON(w, http.StatusInternalServerError, "Authentication failed")
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+			httputil.ErrorJSON(w, http.StatusInternalServerError, "Internal server error")
 		}
 		return
 	}
 
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("access_token", u.AccessToken, 900, "/", "", auth.SecureCookies(), true)
-	c.SetCookie("refresh_token", u.RefreshToken, 86400, "/", "", auth.SecureCookies(), true)
+	httputil.SetCookie(w, "access_token", u.AccessToken, 900, auth.SecureCookies(), true)
+	httputil.SetCookie(w, "refresh_token", u.RefreshToken, 86400, auth.SecureCookies(), true)
 
 	res := &LoginUserRes{
 		Username: u.Username,
 		ID:       u.ID,
 	}
-	c.JSON(http.StatusOK, res)
+	httputil.WriteJSON(w, http.StatusOK, res)
 }
 
-func (h *Handler) Logout(c *gin.Context) {
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("access_token", "", -1, "/", "", auth.SecureCookies(), true)
-	c.SetCookie("refresh_token", "", -1, "/", "", auth.SecureCookies(), true)
-	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	httputil.SetCookie(w, "access_token", "", -1, auth.SecureCookies(), true)
+	httputil.SetCookie(w, "refresh_token", "", -1, auth.SecureCookies(), true)
+	httputil.MsgJSON(w, http.StatusOK, "message", "logout successful")
 }
 
-func (h *Handler) RefreshToken(c *gin.Context) {
-	refreshToken, err := c.Cookie("refresh_token")
+func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := httputil.ReadCookie(r, "refresh_token")
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "refresh token missing"})
+		httputil.ErrorJSON(w, http.StatusUnauthorized, "refresh token missing")
 		return
 	}
 
 	claims, err := auth.ValidateRefreshToken(refreshToken)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
+		httputil.ErrorJSON(w, http.StatusUnauthorized, "invalid refresh token")
 		return
 	}
 
@@ -117,12 +94,10 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 
 	accessToken, err := auth.GenerateAccessToken(userID, claims.Username, 15*time.Minute)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate access token"})
+		httputil.ErrorJSON(w, http.StatusInternalServerError, "could not generate access token")
 		return
 	}
 
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("access_token", accessToken, 900, "/", "", auth.SecureCookies(), true)
-	c.JSON(http.StatusOK, gin.H{"success": "access token refreshed successfully"})
-
+	httputil.SetCookie(w, "access_token", accessToken, 900, auth.SecureCookies(), true)
+	httputil.MsgJSON(w, http.StatusOK, "success", "access token refreshed successfully")
 }

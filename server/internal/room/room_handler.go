@@ -4,36 +4,12 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 
-	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
+	"github.com/go-chi/chi/v5"
 	"github.com/jkmoona/go-chat/server/internal/auth"
+	"github.com/jkmoona/go-chat/server/internal/httputil"
 	"github.com/jkmoona/go-chat/server/internal/ws"
 )
-
-func bindingError(err error) string {
-	var ve validator.ValidationErrors
-	if errors.As(err, &ve) {
-		e := ve[0]
-		field := strings.ToLower(e.Field())
-		switch e.Tag() {
-		case "required":
-			return field + " is required"
-		case "min":
-			return field + " must be at least " + e.Param() + " characters"
-		case "max":
-			return field + " must be at most " + e.Param() + " characters"
-		case "oneof":
-			return field + " must be one of: " + strings.ReplaceAll(e.Param(), " ", ", ")
-		case "numeric":
-			return field + " must be numeric"
-		case "len":
-			return field + " must be exactly " + e.Param() + " characters"
-		}
-	}
-	return "invalid request"
-}
 
 type Handler struct {
 	svc Service
@@ -44,19 +20,19 @@ func NewHandler(svc Service, hub *ws.Hub) *Handler {
 	return &Handler{svc: svc, hub: hub}
 }
 
-func (h *Handler) CreateRoom(c *gin.Context) {
+func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 	var req CreateRoomReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindingError(err)})
+	if err := httputil.DecodeAndValidate(r, &req); err != nil {
+		httputil.ErrorJSON(w, http.StatusBadRequest, httputil.BindingError(err))
 		return
 	}
 
-	creatorIDInt, _ := auth.GetUserIDInt(c)
-	creatorIDStr, _ := auth.GetUserID(c)
+	creatorIDInt, _ := auth.GetUserIDInt(r.Context())
+	creatorIDStr, _ := auth.GetUserID(r.Context())
 
-	room, err := h.svc.CreateRoom(c.Request.Context(), &req, creatorIDInt)
+	room, err := h.svc.CreateRoom(r.Context(), &req, creatorIDInt)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create room"})
+		httputil.ErrorJSON(w, http.StatusInternalServerError, "failed to create room")
 		return
 	}
 
@@ -69,7 +45,7 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 		CreatorID: creatorIDStr,
 	})
 
-	c.JSON(http.StatusCreated, RoomRes{
+	httputil.WriteJSON(w, http.StatusCreated, RoomRes{
 		ID:        room.ID,
 		Name:      room.Name,
 		TTL:       room.TTL,
@@ -79,51 +55,51 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 	})
 }
 
-func (h *Handler) ListRooms(c *gin.Context) {
-	rooms, err := h.svc.ListActiveRooms(c.Request.Context())
+func (h *Handler) ListRooms(w http.ResponseWriter, r *http.Request) {
+	rooms, err := h.svc.ListActiveRooms(r.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list rooms"})
+		httputil.ErrorJSON(w, http.StatusInternalServerError, "failed to list rooms")
 		return
 	}
 
-	requesterID, _ := auth.GetUserIDInt(c)
+	requesterID, _ := auth.GetUserIDInt(r.Context())
 
 	res := make([]RoomRes, 0, len(rooms))
-	for _, r := range rooms {
-		info := h.hub.GetRoomInfo(r.ID)
+	for _, rm := range rooms {
+		info := h.hub.GetRoomInfo(rm.ID)
 		res = append(res, RoomRes{
-			ID:        r.ID,
-			Name:      r.Name,
-			TTL:       r.TTL,
-			ExpiresAt: r.ExpiresAt,
-			HasPIN:    r.PinHash != "",
+			ID:        rm.ID,
+			Name:      rm.Name,
+			TTL:       rm.TTL,
+			ExpiresAt: rm.ExpiresAt,
+			HasPIN:    rm.PinHash != "",
 			Clients:   info.ClientCount,
-			IsCreator: requesterID != 0 && r.CreatorID == requesterID,
+			IsCreator: requesterID != 0 && rm.CreatorID == requesterID,
 		})
 	}
 
-	c.JSON(http.StatusOK, res)
+	httputil.WriteJSON(w, http.StatusOK, res)
 }
 
-func (h *Handler) GetRoom(c *gin.Context) {
-	roomID := c.Param("roomId")
+func (h *Handler) GetRoom(w http.ResponseWriter, r *http.Request) {
+	roomID := chi.URLParam(r, "roomId")
 
-	room, err := h.svc.GetRoom(c.Request.Context(), roomID)
+	room, err := h.svc.GetRoom(r.Context(), roomID)
 	if err != nil {
 		if errors.Is(err, ErrRoomNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+			httputil.ErrorJSON(w, http.StatusNotFound, "room not found")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get room"})
+		httputil.ErrorJSON(w, http.StatusInternalServerError, "failed to get room")
 		return
 	}
 
 	info := h.hub.GetRoomInfo(room.ID)
 
-	requesterID, _ := auth.GetUserIDInt(c)
+	requesterID, _ := auth.GetUserIDInt(r.Context())
 	isCreator := requesterID != 0 && requesterID == room.CreatorID
 
-	c.JSON(http.StatusOK, RoomRes{
+	httputil.WriteJSON(w, http.StatusOK, RoomRes{
 		ID:        room.ID,
 		Name:      room.Name,
 		TTL:       room.TTL,
@@ -134,82 +110,82 @@ func (h *Handler) GetRoom(c *gin.Context) {
 	})
 }
 
-func (h *Handler) VerifyPIN(c *gin.Context) {
-	roomID := c.Param("roomId")
+func (h *Handler) VerifyPIN(w http.ResponseWriter, r *http.Request) {
+	roomID := chi.URLParam(r, "roomId")
 
 	var req VerifyPINReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindingError(err)})
+	if err := httputil.DecodeAndValidate(r, &req); err != nil {
+		httputil.ErrorJSON(w, http.StatusBadRequest, httputil.BindingError(err))
 		return
 	}
 
-	if err := h.svc.VerifyPIN(c.Request.Context(), roomID, req.PIN); err != nil {
+	if err := h.svc.VerifyPIN(r.Context(), roomID, req.PIN); err != nil {
 		if errors.Is(err, ErrRoomNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+			httputil.ErrorJSON(w, http.StatusNotFound, "room not found")
 			return
 		}
 		if errors.Is(err, ErrInvalidPIN) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "invalid pin"})
+			httputil.ErrorJSON(w, http.StatusForbidden, "invalid pin")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "verification failed"})
+		httputil.ErrorJSON(w, http.StatusInternalServerError, "verification failed")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "pin verified"})
+	httputil.MsgJSON(w, http.StatusOK, "message", "pin verified")
 }
 
-func (h *Handler) requireCreator(c *gin.Context) (*Room, bool) {
-	roomID := c.Param("roomId")
-	requesterID, _ := auth.GetUserIDInt(c)
+func (h *Handler) requireCreator(w http.ResponseWriter, r *http.Request) (*Room, bool) {
+	roomID := chi.URLParam(r, "roomId")
+	requesterID, _ := auth.GetUserIDInt(r.Context())
 
-	room, err := h.svc.GetRoom(c.Request.Context(), roomID)
+	room, err := h.svc.GetRoom(r.Context(), roomID)
 	if err != nil {
 		if errors.Is(err, ErrRoomNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+			httputil.ErrorJSON(w, http.StatusNotFound, "room not found")
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get room"})
+			httputil.ErrorJSON(w, http.StatusInternalServerError, "failed to get room")
 		}
 		return nil, false
 	}
 
 	if room.CreatorID != requesterID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "only the room creator can perform this action"})
+		httputil.ErrorJSON(w, http.StatusForbidden, "only the room creator can perform this action")
 		return nil, false
 	}
 
 	return room, true
 }
 
-func (h *Handler) ExtendRoom(c *gin.Context) {
-	room, ok := h.requireCreator(c)
+func (h *Handler) ExtendRoom(w http.ResponseWriter, r *http.Request) {
+	room, ok := h.requireCreator(w, r)
 	if !ok {
 		return
 	}
 
 	var req ExtendTTLReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindingError(err)})
+	if err := httputil.DecodeAndValidate(r, &req); err != nil {
+		httputil.ErrorJSON(w, http.StatusBadRequest, httputil.BindingError(err))
 		return
 	}
 
-	updated, err := h.svc.ExtendTTL(c.Request.Context(), room.ID, req.TTL)
+	updated, err := h.svc.ExtendTTL(r.Context(), room.ID, req.TTL)
 	if err != nil {
 		if errors.Is(err, ErrMaxLifetimeReached) {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+			httputil.ErrorJSON(w, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to extend room"})
+		httputil.ErrorJSON(w, http.StatusInternalServerError, "failed to extend room")
 		return
 	}
 
 	if !h.hub.UpdateRoomTTL(room.ID, updated.ExpiresAt) {
-		c.JSON(http.StatusConflict, gin.H{"error": "room has already expired"})
+		httputil.ErrorJSON(w, http.StatusConflict, "room has already expired")
 		return
 	}
 
 	info := h.hub.GetRoomInfo(room.ID)
-	c.JSON(http.StatusOK, RoomRes{
+	httputil.WriteJSON(w, http.StatusOK, RoomRes{
 		ID:        updated.ID,
 		Name:      updated.Name,
 		TTL:       updated.TTL,
@@ -220,42 +196,42 @@ func (h *Handler) ExtendRoom(c *gin.Context) {
 	})
 }
 
-func (h *Handler) DeleteRoom(c *gin.Context) {
-	room, ok := h.requireCreator(c)
+func (h *Handler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
+	room, ok := h.requireCreator(w, r)
 	if !ok {
 		return
 	}
 
 	h.hub.DeleteRoom(room.ID)
-	if err := h.svc.Deactivate(c.Request.Context(), room.ID); err != nil {
+	if err := h.svc.Deactivate(r.Context(), room.ID); err != nil {
 		slog.Error("failed to deactivate deleted room", slog.String("room_id", room.ID), slog.String("error", err.Error()))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "room deleted"})
+	httputil.MsgJSON(w, http.StatusOK, "message", "room deleted")
 }
 
-func (h *Handler) KickClient(c *gin.Context) {
-	room, ok := h.requireCreator(c)
+func (h *Handler) KickClient(w http.ResponseWriter, r *http.Request) {
+	room, ok := h.requireCreator(w, r)
 	if !ok {
 		return
 	}
 
 	var req KickReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindingError(err)})
+	if err := httputil.DecodeAndValidate(r, &req); err != nil {
+		httputil.ErrorJSON(w, http.StatusBadRequest, httputil.BindingError(err))
 		return
 	}
 
-	callerID, _ := auth.GetUserID(c)
+	callerID, _ := auth.GetUserID(r.Context())
 	if req.ClientID == callerID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot kick yourself"})
+		httputil.ErrorJSON(w, http.StatusBadRequest, "cannot kick yourself")
 		return
 	}
 
 	if !h.hub.KickClient(room.ID, req.ClientID) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "client not found in room"})
+		httputil.ErrorJSON(w, http.StatusNotFound, "client not found in room")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "client kicked"})
+	httputil.MsgJSON(w, http.StatusOK, "message", "client kicked")
 }

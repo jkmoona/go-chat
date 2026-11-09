@@ -5,68 +5,70 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 
 	"github.com/jkmoona/go-chat/server/internal/auth"
 	"github.com/jkmoona/go-chat/server/internal/config"
+	"github.com/jkmoona/go-chat/server/internal/httputil"
 	"github.com/jkmoona/go-chat/server/internal/middleware"
 	"github.com/jkmoona/go-chat/server/internal/room"
 	"github.com/jkmoona/go-chat/server/internal/user"
 	"github.com/jkmoona/go-chat/server/internal/ws"
 )
 
-func securityHeaders() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Header("X-Content-Type-Options", "nosniff")
-		c.Header("X-Frame-Options", "DENY")
-		c.Header("Referrer-Policy", "same-origin")
-		c.Header("Content-Security-Policy", "default-src 'self'; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; img-src 'self' data:")
-		c.Next()
-	}
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "same-origin")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; img-src 'self' data:")
+		next.ServeHTTP(w, r)
+	})
 }
 
-func NewRouter(cfg *config.Config, userHandler *user.Handler, roomHandler *room.Handler, wsHandler *ws.Handler) *gin.Engine {
-	r := gin.New()
-	r.Use(gin.Recovery())
+func NewRouter(cfg *config.Config, userHandler *user.Handler, roomHandler *room.Handler, wsHandler *ws.Handler) *chi.Mux {
+	r := chi.NewRouter()
+	r.Use(chimiddleware.Recoverer)
+	r.Use(chimiddleware.ClientIPFromXFFTrustedProxies(1))
 	r.Use(middleware.RequestLogger(slog.Default()))
-	r.Use(securityHeaders())
+	r.Use(securityHeaders)
 
-	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{cfg.ClientURL},
-		AllowMethods:     []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Content-Type"},
-		ExposeHeaders:    []string{"Content-Length"},
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{cfg.ClientURL},
+		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type"},
+		ExposedHeaders:   []string{"Content-Length"},
 		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
+		MaxAge:           int((12 * time.Hour).Seconds()),
 	}))
 
 	authLimiter := middleware.NewRateLimiter(5, 10)
 	roomLimiter := middleware.NewRateLimiter(2, 5)
 
-	r.POST("/register", authLimiter.Middleware(), userHandler.CreateUser)
-	r.POST("/login", authLimiter.Middleware(), userHandler.Login)
-	r.GET("/logout", userHandler.Logout)
-	r.POST("/refresh", userHandler.RefreshToken)
+	r.With(authLimiter.Middleware).Post("/register", userHandler.CreateUser)
+	r.With(authLimiter.Middleware).Post("/login", userHandler.Login)
+	r.Get("/logout", userHandler.Logout)
+	r.Post("/refresh", userHandler.RefreshToken)
 
-	r.GET("/ws/room/:roomId", auth.OptionalAuthMiddleware(), roomHandler.GetRoom)
-	r.POST("/ws/room/:roomId/verify", authLimiter.Middleware(), roomHandler.VerifyPIN)
-	r.GET("/ws/guest/joinRoom/:roomId", authLimiter.Middleware(), wsHandler.GuestJoinRoom)
+	r.With(auth.OptionalAuthMiddleware).Get("/ws/room/{roomId}", roomHandler.GetRoom)
+	r.With(authLimiter.Middleware).Post("/ws/room/{roomId}/verify", roomHandler.VerifyPIN)
+	r.With(authLimiter.Middleware).Get("/ws/guest/joinRoom/{roomId}", wsHandler.GuestJoinRoom)
 
-	wsGroup := r.Group("/ws")
-	wsGroup.Use(auth.AuthMiddleware())
-	{
-		wsGroup.POST("/createRoom", roomLimiter.Middleware(), roomHandler.CreateRoom)
-		wsGroup.GET("/getRooms", roomHandler.ListRooms)
-		wsGroup.GET("/joinRoom/:roomId", wsHandler.JoinRoom)
-		wsGroup.GET("/getClients/:roomId", wsHandler.GetClients)
-		wsGroup.PATCH("/room/:roomId", roomHandler.ExtendRoom)
-		wsGroup.DELETE("/room/:roomId", roomHandler.DeleteRoom)
-		wsGroup.POST("/room/:roomId/kick", roomHandler.KickClient)
-	}
+	r.Route("/ws", func(r chi.Router) {
+		r.Use(auth.AuthMiddleware)
+		r.With(roomLimiter.Middleware).Post("/createRoom", roomHandler.CreateRoom)
+		r.Get("/getRooms", roomHandler.ListRooms)
+		r.Get("/joinRoom/{roomId}", wsHandler.JoinRoom)
+		r.Get("/getClients/{roomId}", wsHandler.GetClients)
+		r.Patch("/room/{roomId}", roomHandler.ExtendRoom)
+		r.Delete("/room/{roomId}", roomHandler.DeleteRoom)
+		r.Post("/room/{roomId}/kick", roomHandler.KickClient)
+	})
 
-	r.NoRoute(func(c *gin.Context) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		httputil.ErrorJSON(w, http.StatusNotFound, "not found")
 	})
 
 	return r

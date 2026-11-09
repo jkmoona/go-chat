@@ -5,9 +5,10 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	"github.com/jkmoona/go-chat/server/internal/auth"
+	"github.com/jkmoona/go-chat/server/internal/httputil"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
@@ -38,35 +39,34 @@ func NewHandler(h *Hub, clientURL string, verifyPIN func(roomID, pin string) err
 	}
 }
 
-func (h *Handler) JoinRoom(c *gin.Context) {
-	roomID := c.Param("roomId")
+func (h *Handler) JoinRoom(w http.ResponseWriter, r *http.Request) {
+	roomID := chi.URLParam(r, "roomId")
 
 	info := h.hub.GetRoomInfo(roomID)
 	if !info.Exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+		httputil.ErrorJSON(w, http.StatusNotFound, "room not found")
 		return
 	}
 
-	clientID, ok := auth.GetUserID(c)
+	clientID, ok := auth.GetUserID(r.Context())
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		httputil.ErrorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
 
 	if info.HasPIN && clientID != info.CreatorID {
-		pin := c.Query("pin")
+		pin := r.URL.Query().Get("pin")
 		if err := h.verifyPIN(roomID, pin); err != nil {
-			c.JSON(http.StatusForbidden, gin.H{"error": "invalid pin"})
+			httputil.ErrorJSON(w, http.StatusForbidden, "invalid pin")
 			return
 		}
 	}
 
-	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
+	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "connection upgrade failed"})
 		return
 	}
-	username, ok := auth.GetUsername(c)
+	username, ok := auth.GetUsername(r.Context())
 	if !ok {
 		conn.Close()
 		return
@@ -112,38 +112,37 @@ func sanitizeName(name string) string {
 	return strings.TrimSpace(b.String())
 }
 
-func (h *Handler) GuestJoinRoom(c *gin.Context) {
-	roomID := c.Param("roomId")
-	name := sanitizeName(c.Query("name"))
+func (h *Handler) GuestJoinRoom(w http.ResponseWriter, r *http.Request) {
+	roomID := chi.URLParam(r, "roomId")
+	name := sanitizeName(r.URL.Query().Get("name"))
 
 	if len(name) == 0 || len(name) > 30 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name must be between 1 and 30 characters"})
+		httputil.ErrorJSON(w, http.StatusBadRequest, "name must be between 1 and 30 characters")
 		return
 	}
 
 	info := h.hub.GetRoomInfo(roomID)
 	if !info.Exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+		httputil.ErrorJSON(w, http.StatusNotFound, "room not found")
 		return
 	}
 
 	if info.HasPIN {
-		pin := c.Query("pin")
+		pin := r.URL.Query().Get("pin")
 		if err := h.verifyPIN(roomID, pin); err != nil {
-			c.JSON(http.StatusForbidden, gin.H{"error": "invalid pin"})
+			httputil.ErrorJSON(w, http.StatusForbidden, "invalid pin")
 			return
 		}
 	}
 
 	guestID, err := gonanoid.New(8)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate guest id"})
+		httputil.ErrorJSON(w, http.StatusInternalServerError, "failed to generate guest id")
 		return
 	}
 
-	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
+	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "connection upgrade failed"})
 		return
 	}
 
@@ -178,8 +177,8 @@ func (h *Handler) GuestJoinRoom(c *gin.Context) {
 	cl.readMessage(h.hub)
 }
 
-func (h *Handler) GetClients(c *gin.Context) {
-	roomID := c.Param("roomId")
+func (h *Handler) GetClients(w http.ResponseWriter, r *http.Request) {
+	roomID := chi.URLParam(r, "roomId")
 	hubClients := h.hub.GetClients(roomID)
 	clients := make([]ClientRes, 0, len(hubClients))
 	for _, cl := range hubClients {
@@ -188,5 +187,5 @@ func (h *Handler) GetClients(c *gin.Context) {
 			Username: cl.Username,
 		})
 	}
-	c.JSON(http.StatusOK, clients)
+	httputil.WriteJSON(w, http.StatusOK, clients)
 }

@@ -31,7 +31,7 @@ func main() {
 	}
 
 	var handler slog.Handler
-	if os.Getenv("GIN_MODE") == "release" {
+	if os.Getenv("APP_ENV") == "production" {
 		handler = slog.NewJSONHandler(os.Stdout, nil)
 	} else {
 		handler = slog.NewTextHandler(os.Stdout, nil)
